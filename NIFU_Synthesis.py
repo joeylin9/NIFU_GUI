@@ -7,7 +7,7 @@ class NIFU_Synthesis:
         self.root = tk.Tk()
         self.root.columnconfigure(0, weight=1)
         self.root.columnconfigure(1, weight=5)
-        tk.Label(self.root, text="NIFU SYNTHESIS", font=('Arial',18, 'bold')).grid(row=0, column=0, pady=(20,10))
+        tk.Label(self.root, text="NIFU SYNTHESIS", font=('Arial',18, 'bold')).grid(row=0, column=0, pady=10)
 
         gui_frame = tk.Frame(self.root)
 
@@ -16,46 +16,61 @@ class NIFU_Synthesis:
 
         ### --- PUMPS --- ###
         pumps_frame = tk.Frame(equipment_frame)
-        tk.Label(equipment_frame, text="Pumps | Flow Rates (mL/min)", font=('Arial', 16, 'underline')).pack(anchor='nw', padx=15)
-        self.pumps_dict = {
-            'Pump 1: HNO₃': ['off', '0', None, None],
-            'Pump 2: Acetic anhydride': ['off', '0', None, None],
-            'Pump 3: Furfural': ['off', '0', None, None],
-            'Pump 4: KOH': ['off', '0', None, None],
-            'Pump 5: 2MeTHF': ['off', '0', None, None],
-            'Pump 6: Organic': ['off', '0', None, None],
-            'Pump 7: Aqueous': ['off', '0', None, None],
-            'Pump 8: H₂SO₄': ['off', '0', None, None],
-            'Pump 9: Amionhydantoin': ['off', '0', None, None],
-            'Pump 10: Crude NIFU Out': ['off', '0', None, None]
-        }
-        self.pumps_onoff_vars = []
+        tk.Label(equipment_frame, text="Pumps", font=('Arial', 16, 'underline')).pack(anchor='nw', padx=15)
+        tk.Label(pumps_frame, text='Connect', font=('Arial', 12, 'bold')).grid(row=0, column=1)
+        tk.Label(pumps_frame, text='On', font=('Arial', 12, 'bold')).grid(row=0, column=2)
+        tk.Label(pumps_frame, text='Off', font=('Arial', 12, 'bold')).grid(row=0, column=3)
+        tk.Label(pumps_frame, text='Flow Rate', font=('Arial', 12, 'bold')).grid(row=0, column=4)
+        tk.Label(pumps_frame, text='Set Flow Rate', font=('Arial', 12, 'bold')).grid(row=0, column=5)
+        self.pumps_list = ['Pump 1: HNO₃',
+            'Pump 2: Acetic anhydride',
+            'Pump 3: Furfural',
+            'Pump 4: KOH',
+            'Pump 5: 2MeTHF',
+            'Pump 6: Organic',
+            'Pump 7: Aqueous',
+            'Pump 8: H₂SO₄',
+            'Pump 9: Amionhydantoin',
+            'Pump 10: Crude NIFU Out'
+        ]
+        self.pump_connect_vars = [False] * len(self.pumps_list)
+        self.pump_connect_buttons = []
+        self.pump_on_buttons = []
+        self.pump_off_buttons = []
         self.pump_flow_entry_vars = []
 
-        for i, pump_name in enumerate(self.pumps_dict):
+        for i, pump_name in enumerate(self.pumps_list):
             # Pump names
-            tk.Label(pumps_frame, text=pump_name).grid(row=i, column=0, sticky='w')
+            tk.Label(pumps_frame, text=pump_name).grid(row=i+1, column=0, sticky='w')
+
+            # Connect buttons
+            pump_connect_button = tk.Button(pumps_frame, text='Disconnected', width=12, command=lambda i=i: self.pump_connect(i))
+            pump_connect_button.grid(row=i+1, column=1, padx=10)
+            self.pump_connect_buttons.append(pump_connect_button)
 
             # On/Off buttons
-            pumps_onoff_var = tk.IntVar()
-            pumps_onoff_var.set(0)  # Initial state: off
-            self.pumps_onoff_vars.append(pumps_onoff_var)
-            pump_on_button = tk.Radiobutton(pumps_frame, text='on', value=1, variable=pumps_onoff_var)
-            pump_off_button = tk.Radiobutton(pumps_frame, text='off', value=0, variable=pumps_onoff_var)
-            pump_on_button.grid(row=i, column=1)
-            pump_off_button.grid(row=i, column=2)
+            pump_on_button = tk.Button(pumps_frame, text='On', width=7, command=lambda i=i: self.pump_on(i))
+            pump_off_button = tk.Button(pumps_frame, text='Off', width=7, command=lambda i=i: self.pump_off(i))
+            self.pump_on_buttons.append(pump_on_button)
+            self.pump_off_buttons.append(pump_off_button)
+            pump_on_button.grid(row=i+1, column=2, padx = 10)
+            pump_off_button.grid(row=i+1, column=3, padx=10)
 
             # Entry for flow rate
             self.pump_flow_entry_var = tk.StringVar()
-            pump_flow_entry = tk.Entry(pumps_frame, textvariable=self.pump_flow_entry_var)
-            pump_flow_entry.grid(row=i, column=3, sticky='e', padx=(15,0))
+            pump_flow_entry = tk.Entry(pumps_frame, textvariable=self.pump_flow_entry_var, width=15)
+            pump_flow_entry.grid(row=i+1, column=4, padx=10)
             self.pump_flow_entry_vars.append(self.pump_flow_entry_var)
+
+            # Set Flow Rate Button
+            pump_set_flow_rate_button = tk.Button(pumps_frame, text='Set', width=5, command=lambda i=i: self.pump_set_flow_rate(i))
+            pump_set_flow_rate_button.grid(row=i+1, column=5)
 
         pumps_frame.pack(anchor='nw', padx=15)
 
         ### --- VALVES --- ###
         valves_frame = tk.Frame(equipment_frame)
-        tk.Label(equipment_frame, text="3-Way Valves", font=('Arial', 16, 'underline')).pack(anchor='nw', padx=15, pady=(20,0))
+        tk.Label(equipment_frame, text="3-Way Valves", font=('Arial', 16, 'underline')).pack(anchor='nw', padx=15, pady=(10,0))
         self.valves_dict = {
             'Valve 1: Organic': None,
             'Valve 2: H₂SO₄': None,
@@ -80,7 +95,7 @@ class NIFU_Synthesis:
 
         ### --- TEMPERATURES --- ###
         temps_frame = tk.Frame(equipment_frame)
-        tk.Label(equipment_frame, text="Reactor Temperatures (°C)", font=('Arial', 16, 'underline')).pack(anchor='nw', padx=15, pady=(20,0))
+        tk.Label(equipment_frame, text="Reactor Temperatures (°C)", font=('Arial', 16, 'underline')).pack(anchor='nw', padx=15, pady=(10,0))
         self.temps_dict = {
             'Reactor 1: HNO₃': ['off', '0'],
             'Reactor 2: Furfural': ['off', '0'],
@@ -115,7 +130,7 @@ class NIFU_Synthesis:
 
         ### --- LIQUID LEVELS --- ###
         liquid_frame = tk.Frame(equipment_frame)
-        tk.Label(equipment_frame, text="Liquid Levels (mL)", font=('Arial', 16, 'underline')).pack(anchor='nw', padx=15, pady=(20,0))
+        tk.Label(equipment_frame, text="Liquid Levels (mL)", font=('Arial', 16, 'underline')).pack(anchor='nw', padx=15, pady=(10,0))
         self.liquids_dict = {'Organic': '0', 'Aqueous': '0'}
 
         self.org_var = tk.StringVar()
@@ -132,7 +147,7 @@ class NIFU_Synthesis:
 
         ### --- STIRRER --- ###
         stirrer_frame = tk.Frame(equipment_frame)
-        tk.Label(equipment_frame, text="Stirrer (rpm)", font=('Arial', 16, 'underline')).pack(anchor='nw', padx=15, pady=(20,0))
+        tk.Label(equipment_frame, text="Stirrer (rpm)", font=('Arial', 16, 'underline')).pack(anchor='nw', padx=15, pady=(10,0))
 
         self.stirrer_dict = {'Stirrer 1': '0'}
         tk.Label(stirrer_frame, text='Stirrer 1').grid(row=0, column=0)
@@ -145,7 +160,7 @@ class NIFU_Synthesis:
         stirrer_frame.pack(anchor='nw', padx=15)
 
         # Create the Enter button
-        enter_button = tk.Button(self.root, text='Apply Changes / Commands', command=self.apply_button_click)
+        enter_button = tk.Button(self.root, text='Assign and Read Data', command=self.apply_button_click)
         enter_button.place(x=50, y=10)
 
         equipment_frame.grid(row=0, column=0, sticky='nw')
@@ -172,24 +187,23 @@ class NIFU_Synthesis:
         graph_frame.columnconfigure(1, weight=1)
 
         # graph_display
-        graph_display_frame = tk.Frame(graph_frame, width=790, height=450, bg='white')
+        graph_display_frame = tk.Frame(graph_frame, width=600, height=450, bg='white')
 
         #graph_buttons_table
         graph_buttons_table_frame = tk.Frame(graph_frame)
 
         #buttons
-        self.start_button = tk.Button(graph_buttons_table_frame, text='Start', width=20, command=self.change_start_button)
+        self.start_button = tk.Button(graph_buttons_table_frame, text='Start', width=15, command=self.change_start_button)
         self.start_button.grid(row=0, column=0)
-        self.stop_button = tk.Button(graph_buttons_table_frame, text='Stop', width=20, activebackground='IndianRed1', command=self.change_stop_button)
+        self.stop_button = tk.Button(graph_buttons_table_frame, text='Stop', width=15, activebackground='IndianRed1', command=self.change_stop_button)
         self.stop_button.grid(row=1, column=0)
-        update_button = tk.Button(graph_buttons_table_frame, text='Update', width=20)
+        update_button = tk.Button(graph_buttons_table_frame, text='Update', width=15)
         update_button.grid(row=2, column=0)
-        get_data_button = tk.Button(graph_buttons_table_frame, text='Get Data', width=20)
+        get_data_button = tk.Button(graph_buttons_table_frame, text='Get Data', width=15)
         get_data_button.grid(row=3, column=0)
 
         #table
-        tk.Text(graph_buttons_table_frame, width=25, height=20, bg='gray').grid(row=4, column=0, pady=(25,0))
-
+        tk.Text(graph_buttons_table_frame, width=20, height=20, bg='gray').grid(row=4, column=0, pady=(25,0))
 
         graph_display_frame.grid(row=0, column=0, sticky='N')
         graph_buttons_table_frame.grid(row=0, column=1, sticky='n', padx=20)
@@ -197,97 +211,146 @@ class NIFU_Synthesis:
 
         #Checkboxes for what to plot
         tk.Label(data_frame, text='Plot:',font=('Arial', 16, 'underline')).grid(row=3, column=0, pady=10, sticky='nw')
-        plot_frame = tk.Frame(data_frame)
+        self.plot_frame = tk.Frame(data_frame)
 
-        #Temperature checkboxes
-        self.plot_temperature_name = tk.Label(plot_frame, text='Temperature:')
+        # Temperature checkboxes
+        self.plot_temperature_name = tk.Label(self.plot_frame, text='Temperature:')
         self.plot_temperature_name.grid(row=0, column=0, sticky='nw')
         self.plot_temperature_name.grid_remove()
-        self.plot_temperatures = ['Reactor 1: HNO₃', 'Reactor 2: Furfural', 'Reactor 3: KOH','Reactor 4: 2MeTHF',
-                                'Aq-Org Separator', 'Reactor 5: H₂SO₄', 'Reactor 6: Aminohydantoin']
-        self.plot_temperatures_var = [tk.BooleanVar() for data_type in self.plot_temperatures]
+
+        self.plot_temperatures = ['HNO₃', 'Furfural', 'KOH', '2MeTHF', 'Aq-Org Separator', 'H₂SO₄', 'Aminohydantoin']
+        self.plot_temperatures_var = [tk.BooleanVar() for _ in self.plot_temperatures]
         self.plot_temperatures_checkboxes = []
+        self.plot_temperatures_frame = tk.Frame(self.plot_frame)
+
         for index, value in enumerate(self.plot_temperatures):
-            plot_temperatures_checkbox = tk.Checkbutton(plot_frame, text=value, variable=self.plot_temperatures_var[index])
+            plot_temperatures_checkbox = tk.Checkbutton(self.plot_temperatures_frame, text=value, variable=self.plot_temperatures_var[index])
             self.plot_temperatures_checkboxes.append(plot_temperatures_checkbox)
-            if index <= 4:
-                plot_temperatures_checkbox.grid(row=0, column=index + 1, sticky='w')
-            else:
-                plot_temperatures_checkbox.grid(row=1, column=index - 4, sticky='w', pady=(0, 10))
+            plot_temperatures_checkbox.grid(row=0, column=index, sticky='w')
             plot_temperatures_checkbox.grid_remove()
 
-        #Pressure checkboxes
-        self.plot_pressure_name = tk.Label(plot_frame, text='Pressure:')
-        self.plot_pressure_name.grid(row=2, column=0, sticky='nw')
+        self.plot_temperatures_frame.grid(row=0, column=1, sticky='w')
+
+        # Pressure checkboxes
+        self.plot_pressure_name = tk.Label(self.plot_frame, text='Pressure:')
+        self.plot_pressure_name.grid(row=1, column=0, sticky='nw')
         self.plot_pressure_name.grid_remove()
-        self.plot_pressures = ['Pressure 1: HNO₃', 'Pressure 2: Furfural', 'Pressure 3: KOH',
-                               'Pressure 4: H₂SO₄', 'Pressure 5: Aminohydantoin']
-        self.plot_pressures_var = [tk.BooleanVar() for data_type in self.plot_pressures]
+
+        self.plot_pressures = ['HNO₃', 'Furfural', 'KOH', 'H₂SO₄', 'Aminohydantoin']
+        self.plot_pressures_var = [tk.BooleanVar() for _ in self.plot_pressures]
         self.plot_pressures_checkboxes = []
+        self.plot_pressures_frame = tk.Frame(self.plot_frame)
+
         for index, value in enumerate(self.plot_pressures):
-            plot_pressures_checkbox = tk.Checkbutton(plot_frame, text=value, variable=self.plot_pressures_var[index])
+            plot_pressures_checkbox = tk.Checkbutton(self.plot_pressures_frame, text=value, variable=self.plot_pressures_var[index])
             self.plot_pressures_checkboxes.append(plot_pressures_checkbox)
-            plot_pressures_checkbox.grid(row=2, column=index + 1, sticky='w', pady=(0, 10))
+            plot_pressures_checkbox.grid(row=0, column=index, sticky='w')
             plot_pressures_checkbox.grid_remove()
 
-        #Balance checkboxes
-        self.plot_balance_name = tk.Label(plot_frame, text='Balance:')
-        self.plot_balance_name.grid(row=3, column=0, sticky='nw')
+        self.plot_pressures_frame.grid(row=1, column=1, sticky='w')
+
+        # Balance checkboxes
+        self.plot_balance_name = tk.Label(self.plot_frame, text='Balance:')
+        self.plot_balance_name.grid(row=2, column=0, sticky='nw')
         self.plot_balance_name.grid_remove()
-        self.plot_balances = ['Balance 1: HNO₃', 'Balance 2: Acetic anhydride', 'Balance 3: Furfural', 'Balance 4: KOH',
-                              'Balance 5: 2MeTHF', 'Balance 6: Aqueous', ' Balance 7: H₂SO₄', 'Balance 8: Aminohydantoin',
-                              'Balance 9: Crude NIFU Out']
-        self.plot_balances_var = [tk.BooleanVar() for data_type in self.plot_balances]
+
+        self.plot_balances = ['HNO₃', 'Acetic anhydride', 'Furfural', 'KOH', '2MeTHF',
+                              'Aqueous', 'H₂SO₄', 'Aminohydantoin', 'Crude NIFU Out']
+        self.plot_balances_var = [tk.BooleanVar() for _ in self.plot_balances]
         self.plot_balances_checkboxes = []
+        self.plot_balances_frame = tk.Frame(self.plot_frame)
+
         for index, value in enumerate(self.plot_balances):
-            plot_balances_checkbox = tk.Checkbutton(plot_frame, text=value, variable=self.plot_balances_var[index])
+            plot_balances_checkbox = tk.Checkbutton(self.plot_balances_frame, text=value, variable=self.plot_balances_var[index])
             self.plot_balances_checkboxes.append(plot_balances_checkbox)
-            if index <= 4:
-                plot_balances_checkbox.grid(row=3, column=index + 1, sticky='w')
+            if index <= 5:
+                plot_balances_checkbox.grid(row=0, column=index, sticky='w')
             else:
-                plot_balances_checkbox.grid(row=4, column=index - 4, sticky='w', pady=(0, 10))
+                plot_balances_checkbox.grid(row=1, column=index-6, sticky='w')
             plot_balances_checkbox.grid_remove()
 
-        #Flow_rate checkboxes
-        self.plot_flowrate_name = tk.Label(plot_frame, text='Flow Rate:')
-        self.plot_flowrate_name.grid(row=5, column=0, sticky='nw')
+        self.plot_balances_frame.grid(row=2, column=1, sticky='w')
+
+        # Flow rate checkboxes
+        self.plot_flowrate_name = tk.Label(self.plot_frame, text='Flow Rate:')
+        self.plot_flowrate_name.grid(row=3, column=0, sticky='nw')
         self.plot_flowrate_name.grid_remove()
-        self.plot_flow_rates = ['Flow Rate 1: HNO₃', 'Flow Rate 2: Acetic anhydride', 'Flow Rate 3: Reactor 1', 'Flow Rate 4: Furfual',
-                                'Flow Rate 5: Reactor 2', 'Flow Rate 6: KOH', ' Flow Rate 7: 2MeTHF', 'Flow Rate 8: H₂SO₄',
-                                'Flow Rate 9: Aminohydantoin', 'Flow Rate 10: Crude NIFU Out']
-        self.plot_flow_rates_var = [tk.BooleanVar() for data_type in self.plot_flow_rates]
+
+        self.plot_flow_rates = ['HNO₃', 'Acetic anhydride', 'Reactor 1', 'Furfual', 'Reactor 2',
+                                'KOH', '2MeTHF', 'H₂SO₄', 'Aminohydantoin', 'Crude NIFU Out']
+        self.plot_flow_rates_var = [tk.BooleanVar() for _ in self.plot_flow_rates]
         self.plot_flow_rates_checkboxes = []
+        self.plot_flow_rates_frame = tk.Frame(self.plot_frame)
+
         for index, value in enumerate(self.plot_flow_rates):
-            plot_flow_rates_checkbox = tk.Checkbutton(plot_frame, text=value, variable=self.plot_flow_rates_var[index])
+            plot_flow_rates_checkbox = tk.Checkbutton(self.plot_flow_rates_frame, text=value, variable=self.plot_flow_rates_var[index])
             self.plot_flow_rates_checkboxes.append(plot_flow_rates_checkbox)
-            if index <= 4:
-                plot_flow_rates_checkbox.grid(row=5, column=index + 1, sticky='w')
+            if index <= 5:
+                plot_flow_rates_checkbox.grid(row=0, column=index, sticky='w')
             else:
-                plot_flow_rates_checkbox.grid(row=6, column=index - 4, sticky='w', pady=(0, 10))
+                plot_flow_rates_checkbox.grid(row=1, column=index-6, sticky='w')
             plot_flow_rates_checkbox.grid_remove()
 
-        plot_frame.grid(row=4, column=0, sticky='w')
+        self.plot_flow_rates_frame.grid(row=3, column=1, sticky='w')
+
+
+        self.plot_frame.grid(row=4, column=0, sticky='w')
         data_frame.grid(row=0, column=1, sticky='nw')
 
         gui_frame.grid()
 
-        tk.Button(self.root, text='TEST', command=self.p).place(x=10, y=10)
+        tk.Button(self.root, text='TEST', command=self.test).place(x=10, y=10)
         self.root.bind("<KeyPress>", self.exit_shortcut) #press escape button on keyboard to close the GUI
         self.root.mainloop()
 
-    #equipment functions
-    def change_pumps(self):
-        for i, pump_name in enumerate(self.pumps_dict):
-            # Update status ('on' or 'off')
-            pump_status = 'on' if self.pumps_onoff_vars[i].get() == 1 else 'off'
-            self.pumps_dict[pump_name][0] = pump_status
 
-            # Update flow rate
-            if pump_status == 'on':
-                flow_rate = self.pump_flow_entry_vars[i].get()
-                self.pumps_dict[pump_name][1] = flow_rate
-            else:
-                self.pumps_dict[pump_name][1] = '0'
+    #equipment functions
+
+    #pumps
+    def pump_connect(self, pump_index):
+        if self.pump_connect_vars[pump_index]:  # If already connected
+            self.pump_connect_vars[pump_index] = False
+            self.pump_connect_buttons[pump_index].config(bg='SystemButtonFace', text='Disconnected')  # Change back to default color
+        else:  # If not connected
+            self.pump_connect_vars[pump_index] = True
+            self.pump_connect_buttons[pump_index].config(bg='LightSkyBlue1', text='Connected')  # Change to blue color
+
+    def pump_on(self, pump_index):
+        self.pump_on_buttons[pump_index].config(bg='pale green')
+        self.pump_off_buttons[pump_index].config(bg='SystemButtonFace')
+
+        if self.pump_connect_vars[pump_index]: #if connected
+            pump_type = self.pump_type_vars[pump_index].get().upper()
+            pump_port_number = self.pump_port_vars[pump_index].get()
+
+            if pump_type == 'ELDEX':
+                EldexPump.eldex_pump_command(self, port_number=pump_port_number, command='RU')
+            elif pump_type == 'UI22':
+                UI22_Pump.UI22_pump_command(self, port_number=pump_port_number, command='G1', value='1')
+
+    def pump_off(self, pump_index):
+        self.pump_off_buttons[pump_index].config(bg='IndianRed1')
+        self.pump_on_buttons[pump_index].config(bg='SystemButtonFace')
+
+        if self.pump_connect_vars[pump_index]: #if connected
+            pump_type = self.pump_type_vars[pump_index].get().upper()
+            pump_port_number = self.pump_port_vars[pump_index].get()
+
+            if pump_type == 'ELDEX':
+                EldexPump.eldex_pump_command(self, port_number=pump_port_number, command='ST')
+            elif pump_type == 'UI22':
+                UI22_Pump.UI22_pump_command(self, port_number=pump_port_number, command='G1', value='0')
+
+    def pump_set_flow_rate(self, pump_index):
+        if self.pump_connect_vars[pump_index]: #if connected
+            pump_type = self.pump_type_vars[pump_index].get().upper()
+            pump_port_number = self.pump_port_vars[pump_index].get()
+            flow_rate = self.pump_flow_entry_vars[pump_index].get()
+
+            if pump_type == 'ELDEX':
+                EldexPump.eldex_pump_command(self, port_number=pump_port_number, command='SF', value=flow_rate)
+            elif pump_type == 'UI22':
+                UI22_Pump.UI22_pump_command(self, port_number=pump_port_number, command='S3', value=flow_rate)
 
     def change_valves(self):
         for i, valve_name in enumerate(self.valves_dict):
@@ -317,7 +380,6 @@ class NIFU_Synthesis:
 
     def apply_button_click(self):
         # Update all dictionaries with the current values from the GUI, and open commands page
-        self.change_pumps()
         self.change_valves()
         self.change_temps()
         self.change_liquids()
@@ -325,9 +387,14 @@ class NIFU_Synthesis:
         self.open_assign()
 
     def open_assign(self):
+        """
+        Assigns a pump type and port number to each pump, and has commands to read data
+        Outputs a list for pump type, pump port numbers, and balance port numbers, in the order that corresponds with self.pumps_list
+        """
+
         self.assign_page = tk.Toplevel(self.root)
 
-        #pumps+balance
+        #pumps and balance
         tk.Label(self.assign_page, text='Assign Pump Types and Ports', font=('Arial', 14)).pack(pady=10)
         pump_frame = tk.Frame(self.assign_page)
 
@@ -340,13 +407,8 @@ class NIFU_Synthesis:
         self.pump_port_vars = []
         self.balance_port_vars = []
 
-        self.pumps_on = []
-        for p in self.pumps_dict:
-            if self.pumps_dict[p][0] == 'on':
-                self.pumps_on.append(p)
-
-        for i, name in enumerate(self.pumps_on):
-            tk.Label(pump_frame, text=name).grid(row=i+1, column=0, sticky='w', padx=5)
+        for i, name in enumerate(self.pumps_list):
+            tk.Label(pump_frame, text=name).grid(row=i+1, column=0, padx=5)
 
             self.pump_type_var = tk.StringVar()
             pump_type_entry = tk.Entry(pump_frame, textvariable=self.pump_type_var)
@@ -364,58 +426,24 @@ class NIFU_Synthesis:
             balance_port_spinbox.grid(row=i+1, column=3, padx=5)
             self.balance_port_vars.append(self.pump_port_var)
 
+            #reading data buttons
+            tk.Button(pump_frame, text='Read Flow Rate', command=lambda i=i: self.read_flow_rate(i)).grid(row=i+1, column=4,padx=5)
+            tk.Button(pump_frame, text='Read Balance Data', command=lambda i=i: self.read_balance_data(i)).grid(row=i+1, column=5, padx=5)
+
         pump_frame.pack(pady=10)
-        tk.Button(self.assign_page, text='Apply to Pumps', command=self.apply_pump_changes).pack(pady=5)
-        tk.Button(self.assign_page, text='Read Flow Rates', command=self.read_flow_rates).pack(pady=5)
-        tk.Button(self.assign_page, text='Read Balance Data', command=self.read_balance_data).pack(pady=5)
 
-    def apply_pump_changes(self):
-        if messagebox.askyesno(title='Confirm', message='Apply Changes?'):
+    def read_flow_rate(self, pump_index):
+        pump_type = self.pump_type_vars[pump_index].get().upper()
+        pump_port_number = self.pump_port_vars[pump_index].get()
+        if pump_type == 'ELDEX':
+            EldexPump.eldex_pump_command(self, port_number=pump_port_number, command='RF')
+        elif pump_type == 'UI22':
+            UI22_Pump.UI22_pump_command(self, port_number=pump_port_number, command='Q2', value='c')
 
-            #change pump type and port
-            for i, pump_name in enumerate(self.pumps_on):
-                self.pumps_dict[pump_name][2] = self.pump_type_vars[i].get().upper() #pump type
-                self.pumps_dict[pump_name][3] = self.pump_port_vars[i].get() #pump port number
+    def read_balance_data(self, pump_index):
+        pump_port_number = self.pump_port_vars[pump_index].get()
+        Balance.balance_read_data(self, port_number=pump_port_number)
 
-            for i, pump_name in enumerate(self.pumps_dict):
-                onoff = self.pumps_dict[pump_name][0]
-                flow_rate = self.pumps_dict[pump_name][1]
-                pump_type = self.pumps_dict[pump_name][2]
-                pump_port_num = self.pumps_dict[pump_name][3]
-                if pump_type == 'ELDEX':
-                    if onoff == 'on':
-                        EldexPump.eldex_pump_command(self, port_number=pump_port_num, command='RU') #start pump
-                        EldexPump.eldex_pump_command(self, port_number=pump_port_num, command='SF', value=flow_rate) #set flow
-                    else:
-                        EldexPump.eldex_pump_command(self, port_number=pump_port_num, command='ST') #stop pump
-                elif pump_type == 'UI22':
-                    if onoff == 'on':
-                        UI22_Pump.UI22_pump_command(self, port_number=pump_port_num, command='G1', value='1') #start pump
-                        UI22_Pump.UI22_pump_command(self, port_number=pump_port_num, command='S3', value=flow_rate) #set flow
-                    else:
-                        UI22_Pump.UI22_pump_command(self, port_number=pump_port_num, command='G1', value='0') #stop pump
-        self.assign_page.attributes("-topmost", True)
-
-    def read_flow_rates(self):
-        #change pump type and port
-        for i, pump_name in enumerate(self.pumps_on):
-            self.pumps_dict[pump_name][2] = self.pump_type_vars[i].get().upper() #pump type
-            self.pumps_dict[pump_name][3] = self.pump_port_vars[i].get() #pump port number
-
-        for i, pump_name in enumerate(self.pumps_on):
-            pump_type = self.pumps_dict[pump_name][2]
-            pump_port_num = self.pumps_dict[pump_name][3]
-
-            if pump_type == 'ELDEX':
-                EldexPump.eldex_pump_command(self, port_number=pump_port_num, command='RF')
-            elif pump_type == 'UI22':
-                UI22_Pump.UI22_pump_command(self, port_number=pump_port_num, command='Q2', value='c')
-        self.assign_page.attributes("-topmost", True)
-
-    def read_balance_data(self):
-        port_num = self.balance_port_var.get()
-        Balance.balance_read_data(self, port_number=port_num)
-        self.assign_page.attributes("-topmost", True)
 
     #graph data functions
     def change_start_button(self):
@@ -425,35 +453,35 @@ class NIFU_Synthesis:
     def change_stop_button(self):
         self.start_button.config(background='SystemButtonFace')
 
+    def update_plot_checkboxes(self, *args):
+        frames = [
+            (self.plot_temperature_name, self.plot_temperatures_checkboxes, self.plot_temperatures_frame),
+            (self.plot_pressure_name, self.plot_pressures_checkboxes, self.plot_pressures_frame),
+            (self.plot_balance_name, self.plot_balances_checkboxes, self.plot_balances_frame),
+            (self.plot_flowrate_name, self.plot_flow_rates_checkboxes, self.plot_flow_rates_frame),
+        ]
+
+        row = 0
+        for i, var in enumerate(self.data_types_var):
+            name, checkboxes, frame = frames[i]
+            if var.get():
+                name.grid(row=row, column=0, sticky='nw')
+                frame.grid(row=row, column=1, sticky='w')
+                for checkbox in checkboxes:
+                    checkbox.grid()
+                row += 1
+            else:
+                name.grid_remove()
+                frame.grid_remove()
+                for checkbox in checkboxes:
+                    checkbox.grid_remove()
+
+    # Other functions
     def exit_shortcut(self, event):
         """Shortcut for exiting all pages"""
         if event.keysym == "Escape":
             quit()
 
-    def p(self):
-        print('Pumps:', self.pumps_dict)
-        print('Valves:',self.valves_dict)
-        print('Temp:',self.temps_dict)
-        print('Liquids:',self.liquids_dict)
-        print('Stirrer:',self.stirrer_dict)
-
-    def update_plot_checkboxes(self, *args):
-        for i, var in enumerate(self.data_types_var):
-            if i == 0:  # Temperature
-                self.plot_temperature_name.grid() if var.get() else self.plot_temperature_name.grid_remove()
-                for checkbox in self.plot_temperatures_checkboxes:
-                    checkbox.grid() if var.get() else checkbox.grid_remove()
-            elif i == 1:  # Pressure
-                self.plot_pressure_name.grid() if var.get() else self.plot_pressure_name.grid_remove()
-                for checkbox in self.plot_pressures_checkboxes:
-                    checkbox.grid() if var.get() else checkbox.grid_remove()
-            elif i == 2:  # Balance
-                self.plot_balance_name.grid() if var.get() else self.plot_balance_name.grid_remove()
-                for checkbox in self.plot_balances_checkboxes:
-                    checkbox.grid() if var.get() else checkbox.grid_remove()
-            elif i == 3:  # Flow Rate
-                self.plot_flowrate_name.grid() if var.get() else self.plot_flowrate_name.grid_remove()
-                for checkbox in self.plot_flow_rates_checkboxes:
-                    checkbox.grid() if var.get() else checkbox.grid_remove()
-
+    def test(self):
+        pass
 NIFU_Synthesis()
