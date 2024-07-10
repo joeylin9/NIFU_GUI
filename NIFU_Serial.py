@@ -1,6 +1,4 @@
 import serial
-from time import sleep
-from random import uniform
 
 class EldexPump:
     def __init__(self):
@@ -34,7 +32,7 @@ class EldexPump:
         }
 
     def eldex_pump_command(self, port_number, command, value=''):
-        p = f'/COM{port_number}'
+        p = f'COM{port_number}'
         ser = serial.Serial(port=p, baudrate=9600, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
                             bytesize=serial.EIGHTBITS, timeout=1)
         print("connected to: " + ser.portstr)
@@ -66,13 +64,13 @@ class UI22_Pump():
         }
 
     def UI22_pump_command(self, port_number, command, address='01', value=''):
-        p = f'/COM{port_number}'
+        p = f'COM{port_number}'
         ser = serial.Serial(port=p, baudrate=9600, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
                             bytesize=serial.EIGHTBITS, timeout=1)
         print("connected to: " + ser.portstr)
 
         # Format the command string and encode it to bytes
-        command_str = f';{address},{command},{value}<CR><LF>'
+        command_str = f';{address},{command},{value}\r\n'
         ser.write(command_str.encode('ascii'))
 
         # Read and print the response from the pump
@@ -81,7 +79,7 @@ class UI22_Pump():
 
 class Balance:
     def balance_read_data(self, port_number):
-        p = f'/COM{port_number}'
+        p = f'COM{port_number}'
         ser = serial.Serial(port=p, baudrate = 9600, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
                             bytesize=serial.EIGHTBITS, timeout=0.2)
         print("connected to: " + ser.portstr)
