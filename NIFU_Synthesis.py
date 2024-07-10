@@ -325,7 +325,7 @@ class NIFU_Synthesis:
 
             if pump_type == 'ELDEX':
                 EldexPump.eldex_pump_command(self, port_number=pump_port_number, command='RU')
-            elif pump_type == 'UI22':
+            elif pump_type == 'UI-22':
                 UI22_Pump.UI22_pump_command(self, port_number=pump_port_number, command='G1', value='1')
 
     def pump_off(self, pump_index):
@@ -338,7 +338,7 @@ class NIFU_Synthesis:
 
             if pump_type == 'ELDEX':
                 EldexPump.eldex_pump_command(self, port_number=pump_port_number, command='ST')
-            elif pump_type == 'UI22':
+            elif pump_type == 'UI-22':
                 UI22_Pump.UI22_pump_command(self, port_number=pump_port_number, command='G1', value='0')
 
     def pump_set_flow_rate(self, pump_index):
@@ -349,7 +349,7 @@ class NIFU_Synthesis:
 
             if pump_type == 'ELDEX':
                 EldexPump.eldex_pump_command(self, port_number=pump_port_number, command='SF', value=flow_rate)
-            elif pump_type == 'UI22':
+            elif pump_type == 'UI-22':
                 UI22_Pump.UI22_pump_command(self, port_number=pump_port_number, command='S3', value=flow_rate)
 
     def change_valves(self):
@@ -424,7 +424,7 @@ class NIFU_Synthesis:
             self.balance_port_var = tk.IntVar()
             balance_port_spinbox = tk.Spinbox(pump_frame, textvariable=self.balance_port_var, from_=0, to=20, wrap=True)
             balance_port_spinbox.grid(row=i+1, column=3, padx=5)
-            self.balance_port_vars.append(self.pump_port_var)
+            self.balance_port_vars.append(self.balance_port_var)
 
             #reading data buttons
             tk.Button(pump_frame, text='Read Flow Rate', command=lambda i=i: self.read_flow_rate(i)).grid(row=i+1, column=4,padx=5)
@@ -437,14 +437,14 @@ class NIFU_Synthesis:
         pump_port_number = self.pump_port_vars[pump_index].get()
         if pump_type == 'ELDEX':
             EldexPump.eldex_pump_command(self, port_number=pump_port_number, command='RF')
-        elif pump_type == 'UI22':
+        elif pump_type == 'UI-22':
             UI22_Pump.UI22_pump_command(self, port_number=pump_port_number, command='Q2', value='c')
 
-    def read_balance_data(self, pump_index):
-        pump_port_number = self.pump_port_vars[pump_index].get()
-        Balance.balance_read_data(self, port_number=pump_port_number)
+    def read_balance_data(self, balance_index):
+        balance_port_number = self.balance_port_vars[balance_index].get()
+        Balance.balance_read_data(self, port_number=balance_port_number)
 
-
+    
     #graph data functions
     def change_start_button(self):
         self.start_button.config(background='pale green')
