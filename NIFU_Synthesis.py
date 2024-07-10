@@ -1,5 +1,4 @@
 import tkinter as tk
-from tkinter import messagebox
 from NIFU_Serial import EldexPump, UI22_Pump, Balance
 
 class NIFU_Synthesis:
@@ -67,6 +66,10 @@ class NIFU_Synthesis:
             pump_set_flow_rate_button.grid(row=i+1, column=5)
 
         pumps_frame.pack(anchor='nw', padx=15)
+
+        self.pump_type_vars = [None for i in self.pumps_list]
+        self.pump_port_vars = [None for i in self.pumps_list]
+        self.balance_port_vars = [None for i in self.pumps_list]
 
         ### --- VALVES --- ###
         valves_frame = tk.Frame(equipment_frame)
@@ -403,28 +406,30 @@ class NIFU_Synthesis:
         tk.Label(pump_frame, text='Pump Port Number', font=('TkDefaultFont', 9, 'underline')).grid(row=0, column=2)
         tk.Label(pump_frame, text='Balance Port Number', font=('TkDefaultFont', 9, 'underline')).grid(row=0, column=3)
 
-        self.pump_type_vars = []
-        self.pump_port_vars = []
-        self.balance_port_vars = []
-
         for i, name in enumerate(self.pumps_list):
             tk.Label(pump_frame, text=name).grid(row=i+1, column=0, padx=5)
 
             self.pump_type_var = tk.StringVar()
+            if self.pump_type_vars[i]:
+                self.pump_type_var.set(self.pump_type_vars[i].get())
             pump_type_entry = tk.Entry(pump_frame, textvariable=self.pump_type_var)
             pump_type_entry.grid(row=i+1, column=1, padx=5)
-            self.pump_type_vars.append(self.pump_type_var)
+            self.pump_type_vars[i] = (self.pump_type_var)
 
             self.pump_port_var = tk.IntVar()
+            if self.pump_port_vars[i]:
+                self.pump_port_var.set(self.pump_port_vars[i].get())
             pump_port_spinbox = tk.Spinbox(pump_frame, textvariable=self.pump_port_var, from_=0, to=20, wrap=True)
             pump_port_spinbox.grid(row=i+1, column=2, padx=5)
-            self.pump_port_vars.append(self.pump_port_var)
+            self.pump_port_vars[i] = (self.pump_port_var)
 
             #balances
             self.balance_port_var = tk.IntVar()
+            if self.balance_port_vars[i]:
+                self.balance_port_var.set(self.balance_port_vars[i].get())
             balance_port_spinbox = tk.Spinbox(pump_frame, textvariable=self.balance_port_var, from_=0, to=20, wrap=True)
             balance_port_spinbox.grid(row=i+1, column=3, padx=5)
-            self.balance_port_vars.append(self.balance_port_var)
+            self.balance_port_vars[i] = (self.balance_port_var)
 
             #reading data buttons
             tk.Button(pump_frame, text='Read Flow Rate', command=lambda i=i: self.read_flow_rate(i)).grid(row=i+1, column=4,padx=5)
@@ -444,7 +449,7 @@ class NIFU_Synthesis:
         balance_port_number = self.balance_port_vars[balance_index].get()
         Balance.balance_read_data(self, port_number=balance_port_number)
 
-    
+
     #graph data functions
     def change_start_button(self):
         self.start_button.config(background='pale green')
