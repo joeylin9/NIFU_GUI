@@ -4,11 +4,36 @@ from NIFU_Serial import EldexPump, UI22_Pump, Balance
 class NIFU_Synthesis:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.columnconfigure(0, weight=1)
-        self.root.columnconfigure(1, weight=5)
-        tk.Label(self.root, text="NIFU SYNTHESIS", font=('Arial',18, 'bold')).grid(row=0, column=0, pady=10)
+        tk.Label(self.root, text="NIFU SYNTHESIS", font=('Arial',18, 'bold')).pack(pady=10)
 
-        gui_frame = tk.Frame(self.root)
+        vscrollbar = tk.Scrollbar(self.root, orient='vertical')
+        vscrollbar.pack(fill='y', side='right', expand=False)
+        hscrollbar = tk.Scrollbar(self.root, orient='horizontal')
+        hscrollbar.pack(fill='x', side='bottom', expand=False)
+        canvas = tk.Canvas(self.root, bd=0, highlightthickness=0, yscrollcommand=vscrollbar.set, xscrollcommand=hscrollbar.set)
+        canvas.pack(side='left', fill='both', expand=True)
+        vscrollbar.config(command=canvas.yview)
+        hscrollbar.config(command=canvas.xview)
+
+        canvas.xview_moveto(0)
+        canvas.yview_moveto(0)
+
+        self.interior = tk.Frame(canvas)
+        canvas.create_window(0,0, window=self.interior, anchor='nw')
+
+        def configure_interior(event):
+            # Update the scrollbars to match the size of the inner frame.
+            size = (self.interior.winfo_reqwidth(), self.interior.winfo_reqheight())
+            canvas.config(scrollregion="0 0 %s %s" % size)
+            if self.interior.winfo_reqwidth() != canvas.winfo_width():
+                # Update the canvas's width to fit the inner frame.
+                canvas.config(width=self.interior.winfo_reqwidth())
+            if self.interior.winfo_reqheight() != canvas.winfo_height():
+            # Update the canvas's width to fit the inner frame.
+                canvas.config(height=self.interior.winfo_reqheight())
+        self.interior.bind('<Configure>', configure_interior)
+
+        gui_frame = tk.Frame(self.interior)
 
         ### ---EQUIPMENT--- ###
         equipment_frame = tk.Frame(gui_frame)
@@ -300,7 +325,7 @@ class NIFU_Synthesis:
         self.plot_frame.grid(row=4, column=0, sticky='w')
         data_frame.grid(row=0, column=1, sticky='nw')
 
-        gui_frame.grid()
+        gui_frame.pack()
 
         tk.Button(self.root, text='TEST', command=self.test).place(x=10, y=10)
         self.root.bind("<KeyPress>", self.exit_shortcut) #press escape button on keyboard to close the GUI
@@ -406,6 +431,8 @@ class NIFU_Synthesis:
         tk.Label(pump_frame, text='Pump Port Number', font=('TkDefaultFont', 9, 'underline')).grid(row=0, column=2)
         tk.Label(pump_frame, text='Balance Port Number', font=('TkDefaultFont', 9, 'underline')).grid(row=0, column=3)
 
+        self.balance_save_vars = [tk.BooleanVar() for i in self.pumps_list]
+
         for i, name in enumerate(self.pumps_list):
             tk.Label(pump_frame, text=name).grid(row=i+1, column=0, padx=5)
 
@@ -435,6 +462,8 @@ class NIFU_Synthesis:
             tk.Button(pump_frame, text='Read Flow Rate', command=lambda i=i: self.read_flow_rate(i)).grid(row=i+1, column=4,padx=5)
             tk.Button(pump_frame, text='Read Balance Data', command=lambda i=i: self.read_balance_data(i)).grid(row=i+1, column=5, padx=5)
 
+            tk.Checkbutton(pump_frame, text='Save', variable=self.balance_save_vars[i]).grid(row=i+1, column=6)
+
         pump_frame.pack(pady=10)
 
     def read_flow_rate(self, pump_index):
@@ -447,7 +476,7 @@ class NIFU_Synthesis:
 
     def read_balance_data(self, balance_index):
         balance_port_number = self.balance_port_vars[balance_index].get()
-        Balance.balance_read_data(self, port_number=balance_port_number)
+        Balance.balance_read_data(self, port_number=balance_port_number, save=self.balance_save_vars[balance_index].get())
 
 
     #graph data functions
