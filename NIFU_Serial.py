@@ -1,4 +1,6 @@
 import serial
+import pandas as pd
+import time
 
 class EldexPump:
     def __init__(self):
@@ -78,11 +80,32 @@ class UI22_Pump():
         print(p + ':', response)
 
 class Balance:
-    def balance_read_data(self, port_number):
+    def balance_read_data(self, port_number, save):
         p = f'COM{port_number}'
-        ser = serial.Serial(port=p, baudrate = 9600, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
+        ser = serial.Serial(port=p, baudrate=9600, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
                             bytesize=serial.EIGHTBITS, timeout=0.2)
         print("connected to: " + ser.portstr)
-        while True:
-            s = ser.read(10000)
-            print(s)
+
+        times = []
+        balances = []
+        t = 0.0
+        balance_update_interval = 0.001
+        max_time = 1.0
+
+        while t <= max_time:
+            s = ser.read(1000)
+            s_decoded = s.decode('ascii').strip()  # Decode the bytes to string and strip any whitespace
+
+            times.append(t)
+            balances.append(s_decoded)
+
+            time.sleep(balance_update_interval)
+            t += balance_update_interval
+
+        data = {'Time': times, 'Balance': balances}
+        df = pd.DataFrame(data)
+        print(df)
+
+        if save:  # If the save checkbox is marked, save the data to a CSV file
+            df.to_csv('test.csv', index=False)
+            print("Data saved")
