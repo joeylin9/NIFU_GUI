@@ -88,19 +88,17 @@ class Balance:
 
         times = []
         balances = []
-        t = 0.0
-        balance_update_interval = 0.001
-        max_time = 1.0
+        start = time.time()
 
-        while t <= max_time:
+        for i in range(1000):
+            end = time.time()
+            t = end-start
+
             s = ser.read(1000)
             s_decoded = s.decode('ascii').strip()  # Decode the bytes to string and strip any whitespace
 
             times.append(t)
             balances.append(s_decoded)
-
-            time.sleep(balance_update_interval)
-            t += balance_update_interval
 
         data = {'Time': times, 'Balance': balances}
         df = pd.DataFrame(data)
