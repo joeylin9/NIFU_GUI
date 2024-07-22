@@ -88,11 +88,11 @@ class Balance:
             dt = self._times[-1] - self._times[0]
 
             try:
-                if dt >= 2*60:
+                if dt >= 2*60: #after two minutes
                     self.estimate_flow_rate()
-                    for i in range(20):
+                    for i in range(20): #get rid of first 20 entries
                         self._times.popleft()
-                        self._times.popleft()
+                        self._masses.popleft()
 
             except Exception as e:
                 print(f'Exception occured while estimating mass flow rate for balance {self}: {e}')
@@ -137,8 +137,8 @@ while True:
             mass_in_float = float(value.split('g')[0])
             b.mass = mass_in_float
             flow_rate = b.flow_rate
-            output = float(pump1_controller(flow_rate))
             print('current flow rate:', flow_rate)
+            output = float(pump1_controller(flow_rate))
 
             #put the output in the correct format - for eldex pump (assumes output is less than 100 and nonnegative)
             output_str = str(output)
