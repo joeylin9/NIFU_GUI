@@ -1,8 +1,9 @@
 import tkinter as tk
+import threading
 from NIFU_Serial import EldexPump, UI22_Pump, Balance
 
 class NIFU_Synthesis:
-    def __init__(self):
+    def main(self):
         self.root = tk.Tk()
         tk.Label(self.root, text="NIFU SYNTHESIS", font=('Arial',18, 'bold')).pack(pady=10)
 
@@ -460,7 +461,7 @@ class NIFU_Synthesis:
 
             #reading data buttons
             tk.Button(pump_frame, text='Read Flow Rate', command=lambda i=i: self.read_flow_rate(i)).grid(row=i+1, column=4,padx=5)
-            tk.Button(pump_frame, text='Read Balance Data', command=lambda i=i: self.read_balance_data(i)).grid(row=i+1, column=5, padx=5)
+            tk.Button(pump_frame, text='Read Balance Data', command=lambda i=i: self.read_balance_data_thread(i)).grid(row=i+1, column=5, padx=5)
 
             tk.Checkbutton(pump_frame, text='Save', variable=self.balance_save_vars[i]).grid(row=i+1, column=6)
 
@@ -478,6 +479,10 @@ class NIFU_Synthesis:
         balance_port_number = self.balance_port_vars[balance_index].get()
         Balance.balance_read_data(self, port_number=balance_port_number, save=self.balance_save_vars[balance_index].get())
 
+    def read_balance_data_thread(self, balance_index):
+        read_balance_thread = threading.Thread(target=self.read_balance_data, args=(balance_index,))
+        read_balance_thread.daemon = True
+        read_balance_thread.start()
 
     #graph data functions
     def change_start_button(self):
@@ -518,4 +523,6 @@ class NIFU_Synthesis:
 
     def test(self):
         pass
-NIFU_Synthesis()
+
+gui = NIFU_Synthesis()
+gui.main()
