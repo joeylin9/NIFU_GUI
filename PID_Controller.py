@@ -84,14 +84,16 @@ class Balance:
         self._masses.append(value)
 
         dt = 0.0
-        if len(self._times) % 20 == 0: #every 20 increments
+        if len(self._times) % 20 == 0:
             dt = self._times[-1] - self._times[0]
 
             try:
-                if dt>2*60: #only estimate after two minutes
+                if dt >= 2*60:
                     self.estimate_flow_rate()
-                    self._times = []
-                    self._masses = []
+                    for i in range(20):
+                        self._times.popleft()
+                        self._times.popleft()
+
             except Exception as e:
                 print(f'Exception occured while estimating mass flow rate for balance {self}: {e}')
 
@@ -158,7 +160,7 @@ while True:
             # pump_response = pump_ser.readline().decode('ascii')
             # print('pump response:', pump_response)
 
-        time.sleep(.001)
+        time.sleep(1) #one second? due to dt time of balance
 
     except KeyboardInterrupt:
         print('\nStopping serial reading...')
