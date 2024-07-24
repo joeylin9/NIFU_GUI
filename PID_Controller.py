@@ -132,6 +132,9 @@ pump_controllers = [pump_controller1, pump_controller2]
 balance_classes = [f'b{i+1}' for i in range(len(balance_ports))]
 csv_filenames = ['test1', 'test2']
 
+balance_sers = []
+pump_sers = []
+
 def test(balance_port, pump_port, pump_controller, balance_class, csv_filename):
     balance_ser = serial.Serial(port=balance_port, baudrate = 9600, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
                                 bytesize=serial.EIGHTBITS, timeout=0.2)
@@ -139,6 +142,9 @@ def test(balance_port, pump_port, pump_controller, balance_class, csv_filename):
     pump_ser = serial.Serial(port=pump_port, baudrate=9600, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
                         bytesize=serial.EIGHTBITS, timeout=1)
     print("connected to: " + pump_ser.portstr)
+
+    balance_sers.append(balance_ser)
+    pump_sers.append(pump_ser)
 
     balance_class = Balance()
 
@@ -158,7 +164,7 @@ def test(balance_port, pump_port, pump_controller, balance_class, csv_filename):
 
             if value.startswith('+') or value.startswith('-'):
                 # print('skip')
-                pass
+                continue
             else:
                 mass_in_float = float(value.split('g')[0])
                 balance_class.mass = mass_in_float
@@ -167,18 +173,12 @@ def test(balance_port, pump_port, pump_controller, balance_class, csv_filename):
                 output = float(pump_controller(flow_rate))
 
                 #put the output in the correct format - for eldex pump (assumes output is less than 100 and nonnegative)
-                output_str = str(output)
-                if len(output_str)>=6:
-                    output_str = str(round(float(output_str), 3))
-                if output<10:
-                    output_str = '0' + output_str
-                if len(output_str)<6:
-                    output_str = output_str + ('0' * (6-len(output_str)))
+                output_str = f'{output:06.3f}'
 
                 # print('updated flow rate:', output)
 
                 #put flow rate into eldex pump command // comment out to use
-                command_str = f'SF{output}\r\n'
+                command_str = f'SF{output_str}\r\n'
                 pump_ser.write(command_str.encode('ascii'))
 
                 # Read and print the response from the pump
@@ -189,23 +189,31 @@ def test(balance_port, pump_port, pump_controller, balance_class, csv_filename):
 
             human_time = datetime.now()
             log_time = human_time.timestamp()
-            print(f'{human_time}')
+            # print(f'{human_time}')
 
-            csv_file.write(','.join([str(value) for value in [log_time, human_time, mass_in_float, flow_rate, output]]))
-            csv_file.write('\n')
+            csv_file.write(f'{log_time},{human_time},{mass_in_float},{flow_rate},{output}\n')
             csv_file.flush()
 
-        except KeyboardInterrupt:
-            print('\nStopping serial reading...')
-            balance_ser.close()
-            break
+        except Exception as e:
+            print('Error:', e)
 
-threads = [f'thread{i+1}' for i in range(len(balance_ports))]
-thread_objects = []
-for i, thread in enumerate(threads):
+# threads = [f'thread{i+1}' for i in range(len(balance_ports))]
+# for i, thread in enumerate(threads):
+#     thread = threading.Thread(target=test, args=(balance_ports[i], pump_ports[i], pump_controllers[i], balance_classes[i], csv_filenames[i]))
+#     thread.daemon = True
+#     thread.start()
+
+for i in range(len(balance_ports)):
     thread = threading.Thread(target=test, args=(balance_ports[i], pump_ports[i], pump_controllers[i], balance_classes[i], csv_filenames[i]))
-    thread_objects.append(thread)
+    thread.daemon = True
     thread.start()
 
-for thread in thread_objects:
-    thread.join()
+while True:
+    try:
+        time.sleep(1)
+    except KeyboardInterrupt:
+        print('\nStopping serial reading...')
+        for b, p in zip(balance_sers, pump_sers):
+            b.close()
+            p.close()
+        break
