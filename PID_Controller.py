@@ -3,9 +3,10 @@ from typing import Optional
 from scipy.stats import linregress
 import serial
 from datetime import datetime
+import collections
 import threading
 
-class PID_Controller:
+class PID:
     def __init__(self, set_point, kp: float = 1.0, ki: float = 0.0, kd: float = 0.0, integral_error_limit: Optional[float] = None):
         """
         set_point = set point: the desired value to output // constant, based on GUI
@@ -36,7 +37,7 @@ class PID_Controller:
         t = end_time - self._last_time
 
         if process_variable == 0:
-            self._error = 0 #set error to 0 if process_variable is 0
+            self._error = 0
         else:
             self._error = self._set_point - process_variable
 
@@ -54,7 +55,6 @@ class PID_Controller:
         #derivative
         d = self._kd * (self._error - self._last_error) / t if t > 0 else 0
         self._last_error = self._error
-
         self._last_time = time.time()
 
         output = self._set_point + p + i + d
@@ -63,12 +63,15 @@ class PID_Controller:
     def reset(self):
         self._integral_error = 0
 
+max_data_points = int(input("Enter max length of data arrays: "))
 class Balance:
     def __init__(self):
-        self._times = []
-        self._masses = []
+        self._times = collections.deque(maxlen=max_data_points)
+        self._masses = collections.deque(maxlen=max_data_points)
         self._mass = None
         self._mass_flow_rate = 0.0
+
+        self._counter = 0
 
     @property
     def mass(self):
@@ -81,26 +84,20 @@ class Balance:
         sets self._mass as the value, appends the current time to self._times, appends value to masses
         every 20 inputs, calculate dt and if dt>120, calculate flow rate and reset self._times and self._masses
         """
+        self._counter += 1
+
         t = time.time()
         value = float(value)
         self._mass = value
-
         self._times.append(t)
         self._masses.append(value)
 
-        dt = 0.0
-        if len(self._times) % 10 == 0:
-            dt = self._times[-1] - self._times[0]
-
+        if self._counter == max_data_points:
             try:
-                if dt >= 10:
-                    self.estimate_flow_rate()
-                    for i in range(10):
-                        self._times.popleft()
-                        self._masses.popleft()
-
+                self.estimate_flow_rate()
             except Exception as e:
                 print(f'Exception occured while estimating mass flow rate for balance {self}: {e}')
+            self._counter = 0
 
     def estimate_flow_rate(self):
         try:
@@ -125,23 +122,23 @@ class Balance:
 balance_ports = ['COM19', 'COM20']
 pump_ports = ['COM5', 'COM6']
 
-pump_controller1 = PID_Controller(set_point=NotImplemented, kp=NotImplemented, ki=NotImplemented, kd=NotImplemented, integral_error_limit=100)
-pump_controller2 = PID_Controller(set_point=NotImplemented, kp=NotImplemented, ki=NotImplemented, kd=NotImplemented, integral_error_limit=100)
+pump_controller1 = PID(set_point=NotImplemented, kp=NotImplemented, ki=NotImplemented, kd=NotImplemented, integral_error_limit=100)
+pump_controller2 = PID(set_point=NotImplemented, kp=NotImplemented, ki=NotImplemented, kd=NotImplemented, integral_error_limit=100)
 pump_controllers = [pump_controller1, pump_controller2]
 
-balance_classes = [f'b{i+1}' for i in range(len(balance_ports))]
 csv_filenames = ['test1', 'test2']
 
 balance_sers = []
 pump_sers = []
 
-def test(balance_port, pump_port, pump_controller, balance_class, csv_filename):
+def test(balance_port, pump_port, pump_controller, csv_filename):
     balance_ser = serial.Serial(port=balance_port, baudrate = 9600, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
                                 bytesize=serial.EIGHTBITS, timeout=0.2)
     print("connected to: " + balance_ser.portstr)
     pump_ser = serial.Serial(port=pump_port, baudrate=9600, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
                         bytesize=serial.EIGHTBITS, timeout=1)
     print("connected to: " + pump_ser.portstr)
+    pump_ser.write(b'RU\r\n')
 
     balance_sers.append(balance_ser)
     pump_sers.append(pump_ser)
@@ -157,6 +154,7 @@ def test(balance_port, pump_port, pump_controller, balance_class, csv_filename):
     except:
         print("bad file")
 
+    last_flow_rate = 0.0
     while True:
         try:
             balance_data = balance_ser.read(1000)
@@ -170,22 +168,24 @@ def test(balance_port, pump_port, pump_controller, balance_class, csv_filename):
                 balance_class.mass = mass_in_float
                 flow_rate = -(balance_class.flow_rate)
                 # print('current flow rate:', flow_rate)
-                output = float(pump_controller(flow_rate))
 
-                #put the output in the correct format - for eldex pump (assumes output is less than 100 and nonnegative)
-                output_str = f'{output:06.3f}'
+                if flow_rate != last_flow_rate:
+                    output = float(pump_controller(flow_rate))
 
-                # print('updated flow rate:', output)
+                    #put the output in the correct format - for eldex pump (assumes output is less than 100 and nonnegative)
+                    output_str = f'{output:06.3f}'
 
-                #put flow rate into eldex pump command // comment out to use
-                command_str = f'SF{output_str}\r\n'
-                pump_ser.write(command_str.encode('ascii'))
+                    # print('updated flow rate:', output)
 
-                # Read and print the response from the pump
-                # pump_response = pump_ser.readline().decode('ascii')
-                # print('pump response:', pump_response)
+                    #put flow rate into eldex pump command // comment out to use
+                    command_str = f'SF{output_str}\r\n'
+                    pump_ser.write(command_str.encode('ascii'))
 
-            time.sleep(.1)
+                    # Read and print the response from the pump
+                    # pump_response = pump_ser.readline().decode('ascii')
+                    # print('pump response:', pump_response)
+
+                last_flow_rate = flow_rate
 
             human_time = datetime.now()
             log_time = human_time.timestamp()
@@ -194,26 +194,24 @@ def test(balance_port, pump_port, pump_controller, balance_class, csv_filename):
             csv_file.write(f'{log_time},{human_time},{mass_in_float},{flow_rate},{output}\n')
             csv_file.flush()
 
+            time.sleep(.1)
+
         except Exception as e:
             print('Error:', e)
 
-# threads = [f'thread{i+1}' for i in range(len(balance_ports))]
-# for i, thread in enumerate(threads):
-#     thread = threading.Thread(target=test, args=(balance_ports[i], pump_ports[i], pump_controllers[i], balance_classes[i], csv_filenames[i]))
-#     thread.daemon = True
-#     thread.start()
+def pid_start():
+    for i in range(len(balance_ports)):
+        thread = threading.Thread(target=test, args=(balance_ports[i], pump_ports[i], pump_controllers[i], csv_filenames[i]))
+        thread.daemon = True
+        thread.start()
 
-for i in range(len(balance_ports)):
-    thread = threading.Thread(target=test, args=(balance_ports[i], pump_ports[i], pump_controllers[i], balance_classes[i], csv_filenames[i]))
-    thread.daemon = True
-    thread.start()
-
-while True:
-    try:
-        time.sleep(1)
-    except KeyboardInterrupt:
-        print('\nStopping serial reading...')
-        for b, p in zip(balance_sers, pump_sers):
-            b.close()
-            p.close()
-        break
+    while True:
+        try:
+            time.sleep(1)
+        except KeyboardInterrupt:
+            print('\nStopping serial reading...')
+            for b, p in zip(balance_sers, pump_sers):
+                b.close()
+                p.write(b'ST\r\n')
+                p.close()
+            break
