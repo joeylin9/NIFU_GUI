@@ -187,6 +187,7 @@ class pid_control:
                             # print('pump response:', pump_response)
 
                         elif self.pump_type == 'UI-22':
+                            output_str = output_str.replace('.', '')
                             command_str = f';01,S3,{output_str}\r\n'
                             pump_ser.write(command_str.encode('ascii'))
 
