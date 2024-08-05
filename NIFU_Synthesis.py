@@ -1,9 +1,24 @@
 import tkinter as tk
 import threading
-from NIFU_Serial import EldexPump, UI22_Pump, Balance
+from NIFU_Serial import Pump, Balance
+from NIFU_pid import pid_control
+
+#replace with correct values
+pump1_controller = {'set_point': None, 'kp': 0.1, 'ki': 0.0001, 'kd': 0.01, 'integral_error_limit': 100}
+pump2_controller = {'set_point': None, 'kp': 1, 'ki': 1, 'kd': 1, 'integral_error_limit': 100}
+pump3_controller = {'set_point': None, 'kp': 1, 'ki': 1, 'kd': 1, 'integral_error_limit': 100}
+pump4_controller = {'set_point': None, 'kp': 1, 'ki': 1, 'kd': 1, 'integral_error_limit': 100}
+pump5_controller = {'set_point': None, 'kp': 1, 'ki': 1, 'kd': 1, 'integral_error_limit': 100}
+pump6_controller = {'set_point': None, 'kp': 1, 'ki': 1, 'kd': 1, 'integral_error_limit': 100}
+pump7_controller = {'set_point': None, 'kp': 1, 'ki': 1, 'kd': 1, 'integral_error_limit': 100}
+pump8_controller = {'set_point': None, 'kp': 1, 'ki': 1, 'kd': 1, 'integral_error_limit': 100}
+pump9_controller = {'set_point': None, 'kp': 1, 'ki': 1, 'kd': 1, 'integral_error_limit': 100}
+pump10_controller = {'set_point': None, 'kp': 1, 'ki': 1, 'kd': 1, 'integral_error_limit': 100}
+pump_controllers = [pump1_controller, pump2_controller, pump3_controller, pump4_controller, pump5_controller,
+                    pump6_controller, pump7_controller, pump8_controller, pump9_controller, pump10_controller]
 
 class NIFU_Synthesis:
-    def main(self):
+    def __init__(self):
         self.root = tk.Tk()
         tk.Label(self.root, text="NIFU SYNTHESIS", font=('Arial',18, 'bold')).pack(pady=10)
 
@@ -60,9 +75,12 @@ class NIFU_Synthesis:
         ]
         self.pump_connect_vars = [False] * len(self.pumps_list)
         self.pump_connect_buttons = []
+        self.pump_sers = [None] * len(self.pumps_list)
         self.pump_on_buttons = []
         self.pump_off_buttons = []
         self.pump_flow_entry_vars = []
+
+        self.pump_pid_classes = [None] * len(self.pumps_list)
 
         for i, pump_name in enumerate(self.pumps_list):
             # Pump names
@@ -96,6 +114,7 @@ class NIFU_Synthesis:
         self.pump_type_vars = [None for i in self.pumps_list]
         self.pump_port_vars = [None for i in self.pumps_list]
         self.balance_port_vars = [None for i in self.pumps_list]
+        self.flow_rate_csv_vars = [None for i in self.pumps_list]
 
         ### --- VALVES --- ###
         valves_frame = tk.Frame(equipment_frame)
@@ -193,7 +212,6 @@ class NIFU_Synthesis:
         enter_button.place(x=50, y=10)
 
         equipment_frame.grid(row=0, column=0, sticky='nw')
-
 
 
         ### --- DATA --- ###
@@ -340,9 +358,16 @@ class NIFU_Synthesis:
         if self.pump_connect_vars[pump_index]:  # If already connected
             self.pump_connect_vars[pump_index] = False
             self.pump_connect_buttons[pump_index].config(bg='SystemButtonFace', text='Disconnected')  # Change back to default color
+
+            ser = self.pump_sers[pump_index]
+            ser.pump_disconnect()
+
         else:  # If not connected
             self.pump_connect_vars[pump_index] = True
             self.pump_connect_buttons[pump_index].config(bg='LightSkyBlue1', text='Connected')  # Change to blue color
+
+            p = Pump.pump_connect(self, self.pump_port_vars[pump_index].get())
+            self.pump_sers[pump_index] = p
 
     def pump_on(self, pump_index):
         self.pump_on_buttons[pump_index].config(bg='pale green')
@@ -350,36 +375,55 @@ class NIFU_Synthesis:
 
         if self.pump_connect_vars[pump_index]: #if connected
             pump_type = self.pump_type_vars[pump_index].get().upper()
-            pump_port_number = self.pump_port_vars[pump_index].get()
 
+            ser=self.pump_sers[pump_index]
             if pump_type == 'ELDEX':
-                EldexPump.eldex_pump_command(self, port_number=pump_port_number, command='RU')
+                Pump.eldex_pump_command(self, ser, command='RU')
             elif pump_type == 'UI-22':
-                UI22_Pump.UI22_pump_command(self, port_number=pump_port_number, command='G1', value='1')
+                Pump.UI22_pump_command(self, ser, command='G1', value='1')
 
-    def pump_off(self, pump_index):
+    def pump_off(self, pump_index): #turning off requires set flow rate to be set again
         self.pump_off_buttons[pump_index].config(bg='IndianRed1')
         self.pump_on_buttons[pump_index].config(bg='SystemButtonFace')
 
         if self.pump_connect_vars[pump_index]: #if connected
             pump_type = self.pump_type_vars[pump_index].get().upper()
-            pump_port_number = self.pump_port_vars[pump_index].get()
 
+            c = self.pump_pid_classes[pump_index]
+            if c:
+                c.set_off()
+
+            ser=self.pump_sers[pump_index]
             if pump_type == 'ELDEX':
-                EldexPump.eldex_pump_command(self, port_number=pump_port_number, command='ST')
+                Pump.eldex_pump_command(self, ser, command='ST')
             elif pump_type == 'UI-22':
-                UI22_Pump.UI22_pump_command(self, port_number=pump_port_number, command='G1', value='0')
+                Pump.UI22_pump_command(self, ser, command='G1', value='0')
 
-    def pump_set_flow_rate(self, pump_index):
-        if self.pump_connect_vars[pump_index]: #if connected
-            pump_type = self.pump_type_vars[pump_index].get().upper()
-            pump_port_number = self.pump_port_vars[pump_index].get()
-            flow_rate = self.pump_flow_entry_vars[pump_index].get()
+    def pump_set_flow_rate(self, index):
+        if self.pump_connect_vars[index]: #if connected, assumes pump is on
+            balance_port_number = str(self.balance_port_vars[index].get())
+            pump_port_number = str(self.pump_port_vars[index].get())
+            flow_rate = self.pump_flow_entry_vars[index].get()
+            pump_type = self.pump_type_vars[index].get().upper()
 
+            c = self.pump_pid_classes[index]
+            if c:
+                c.set_off()
+
+            ser=self.pump_sers[index]
             if pump_type == 'ELDEX':
-                EldexPump.eldex_pump_command(self, port_number=pump_port_number, command='SF', value=flow_rate)
+                Pump.eldex_pump_command(self, ser, command='SF', value=flow_rate)
             elif pump_type == 'UI-22':
-                UI22_Pump.UI22_pump_command(self, port_number=pump_port_number, command='S3', value=flow_rate)
+                Pump.UI22_pump_command(self, ser, command='S3', value=flow_rate)
+
+            pump_controller = pump_controllers[index]
+            pump_controller['set_point'] = float(flow_rate)
+            c = pid_control(balance_port_number, pump_port_number, pump_controller, pump_type)
+            self.pump_pid_classes[index] = c
+
+            t = threading.Thread(target=c.start_pid, args=(self.flow_rate_csv_vars[index].get(),))
+            t.daemon = True
+            t.start()
 
     def change_valves(self):
         for i, valve_name in enumerate(self.valves_dict):
@@ -422,7 +466,6 @@ class NIFU_Synthesis:
         """
 
         self.assign_page = tk.Toplevel(self.root)
-
         #pumps and balance
         tk.Label(self.assign_page, text='Assign Pump Types and Ports', font=('Arial', 14)).pack(pady=10)
         pump_frame = tk.Frame(self.assign_page)
@@ -431,14 +474,15 @@ class NIFU_Synthesis:
         tk.Label(pump_frame, text='Pump Type', font=('TkDefaultFont', 9, 'underline')).grid(row=0, column=1)
         tk.Label(pump_frame, text='Pump Port Number', font=('TkDefaultFont', 9, 'underline')).grid(row=0, column=2)
         tk.Label(pump_frame, text='Balance Port Number', font=('TkDefaultFont', 9, 'underline')).grid(row=0, column=3)
+        tk.Label(pump_frame, text='CSV File Name', font=('TkDefaultFont', 9, 'underline')).grid(row=0, column=4)
 
-        self.balance_save_vars = [tk.BooleanVar() for i in self.pumps_list]
+        # self.balance_save_vars = [tk.BooleanVar() for i in self.pumps_list]
 
         for i, name in enumerate(self.pumps_list):
             tk.Label(pump_frame, text=name).grid(row=i+1, column=0, padx=5)
 
             self.pump_type_var = tk.StringVar()
-            if self.pump_type_vars[i]:
+            if self.pump_type_vars[i]: #populate assign page with previously assigned values
                 self.pump_type_var.set(self.pump_type_vars[i].get())
             pump_type_entry = tk.Entry(pump_frame, textvariable=self.pump_type_var)
             pump_type_entry.grid(row=i+1, column=1, padx=5)
@@ -459,30 +503,19 @@ class NIFU_Synthesis:
             balance_port_spinbox.grid(row=i+1, column=3, padx=5)
             self.balance_port_vars[i] = (self.balance_port_var)
 
-            #reading data buttons
-            tk.Button(pump_frame, text='Read Flow Rate', command=lambda i=i: self.read_flow_rate(i)).grid(row=i+1, column=4,padx=5)
-            tk.Button(pump_frame, text='Read Balance Data', command=lambda i=i: self.read_balance_data_thread(i)).grid(row=i+1, column=5, padx=5)
+            # tk.Checkbutton(pump_frame, text='Save', variable=self.balance_save_vars[i]).grid(row=i+1, column=6)
 
-            tk.Checkbutton(pump_frame, text='Save', variable=self.balance_save_vars[i]).grid(row=i+1, column=6)
+            #csv file names
+            self.flow_rate_csv_var = tk.StringVar()
+            if not self.flow_rate_csv_vars[i]:
+                self.flow_rate_csv_var.set('Pump'+str(i+1))
+            else:
+                self.flow_rate_csv_var.set(self.flow_rate_csv_vars[i].get())
+            flow_rate_csv_entry = tk.Entry(pump_frame, textvariable=self.flow_rate_csv_var)
+            flow_rate_csv_entry.grid(row=i+1, column=4, padx=5)
+            self.flow_rate_csv_vars[i] = (self.flow_rate_csv_var)
 
         pump_frame.pack(pady=10)
-
-    def read_flow_rate(self, pump_index):
-        pump_type = self.pump_type_vars[pump_index].get().upper()
-        pump_port_number = self.pump_port_vars[pump_index].get()
-        if pump_type == 'ELDEX':
-            EldexPump.eldex_pump_command(self, port_number=pump_port_number, command='RF')
-        elif pump_type == 'UI-22':
-            UI22_Pump.UI22_pump_command(self, port_number=pump_port_number, command='Q2', value='c')
-
-    def read_balance_data(self, balance_index):
-        balance_port_number = self.balance_port_vars[balance_index].get()
-        Balance.balance_read_data(self, port_number=balance_port_number, save=self.balance_save_vars[balance_index].get())
-
-    def read_balance_data_thread(self, balance_index):
-        read_balance_thread = threading.Thread(target=self.read_balance_data, args=(balance_index,))
-        read_balance_thread.daemon = True
-        read_balance_thread.start()
 
     #graph data functions
     def change_start_button(self):
@@ -524,5 +557,4 @@ class NIFU_Synthesis:
     def test(self):
         pass
 
-gui = NIFU_Synthesis()
-gui.main()
+NIFU_Synthesis()
