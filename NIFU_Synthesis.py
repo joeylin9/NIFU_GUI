@@ -16,6 +16,7 @@ pump9_controller = {'set_point': None, 'kp': 1, 'ki': 1, 'kd': 1, 'integral_erro
 pump10_controller = {'set_point': None, 'kp': 1, 'ki': 1, 'kd': 1, 'integral_error_limit': 100}
 pump_controllers = [pump1_controller, pump2_controller, pump3_controller, pump4_controller, pump5_controller,
                     pump6_controller, pump7_controller, pump8_controller, pump9_controller, pump10_controller]
+matrix_lengths = [10, 10, 10, 10, 10, 10, 10, 10, 10, 10]
 
 class NIFU_Synthesis:
     def __init__(self):
@@ -53,6 +54,7 @@ class NIFU_Synthesis:
 
         ### ---EQUIPMENT--- ###
         equipment_frame = tk.Frame(gui_frame)
+        self.csv_obj = None
 
         ### --- PUMPS --- ###
         pumps_frame = tk.Frame(equipment_frame)
@@ -425,10 +427,11 @@ class NIFU_Synthesis:
                 flow_rate = flow_rate.replace('.', '')
                 Pump.UI22_pump_command(self, p_ser, command='S3', value=flow_rate)
 
-            c = pid_control(b_ser, p_ser, pump_controller, pump_type, self.pumps_list[index])
+            c = pid_control(b_ser, p_ser, pump_controller, pump_type, self.pumps_list[index], matrix_lengths[index])
             self.pump_pid_classes[index] = c
+            c.set_csv_obj(self.csv_obj)
 
-            t_pid = threading.Thread(target=c.start_pid, args=(self.csv_obj,))
+            t_pid = threading.Thread(target=c.start_pid)
             t_pid.daemon = True
             t_pid.start()
 
@@ -525,7 +528,11 @@ class NIFU_Synthesis:
         self.start_csv_button.config(background='pale green')
         self.stop_csv_button.config(background='SystemButtonFace')
 
+        print('Writing data into csv file...')
         self.csv_obj = csv_file(self.pumps_list)
+        for c in self.pump_pid_classes:
+            if c:
+                c.set_csv_obj(self.csv_obj)
         t_csv = threading.Thread(target=self.csv_obj.start_file)
         t_csv.daemon = True
         t_csv.start()
@@ -533,6 +540,7 @@ class NIFU_Synthesis:
     def stop_csv(self):
         self.start_csv_button.config(background='SystemButtonFace')
 
+        print('Stopping csv file...')
         self.csv_obj.stop_file()
 
     def update_plot_checkboxes(self, *args):
