@@ -2,17 +2,21 @@ import time
 from scipy.stats import linregress
 from datetime import datetime
 import collections
+from openpyxl import Workbook
+import csv
+import os
 
 class pid_control:
-    def __init__(self, balance_ser, pump_ser, pump_controller, pump_type, pump_name):
+    def __init__(self, balance_ser, pump_ser, pump_controller, pump_type, pump_name, matrix_len):
         self.balance_ser = balance_ser
         self.pump_ser = pump_ser
         p = pump_controller
         self.pump_controller = self.pid(p['set_point'], p['kp'], p['ki'], p['kd'], p['integral_error_limit'])
         self.pump_type = pump_type
         self.pump_name = pump_name
-        self.max_data_points = 10
+        self.max_data_points = matrix_len
 
+        self.csv_obj = None
         self.mass = None
         self.flow_rate = None
         self.pid_output = None
@@ -25,6 +29,9 @@ class pid_control:
         self.mass = None
         self.flow_rate = None
         self.pid_output = None
+
+    def set_csv_obj(self, csv_obj):
+        self.csv_obj = csv_obj
 
     class pid:
         def __init__(self, set_point, kp, ki, kd, integral_error_limit):
@@ -136,7 +143,7 @@ class pid_control:
             except:
                 return 0.0
 
-    def start_pid(self, csv_obj):
+    def start_pid(self):
         balance_ser = self.balance_ser
         pump_ser = self.pump_ser
         b = self.Balance(self.max_data_points)
@@ -176,14 +183,16 @@ class pid_control:
                 self.mass = mass_in_float
                 self.flow_rate = flow_rate
                 self.pid_output = output
-                csv_obj.change_data(self.pump_name, self.get_last())
+                if self.csv_obj:
+                    self.csv_obj.change_data(self.pump_name, self.get_last())
 
                 time.sleep(.1)
 
             except Exception as e:
                 print('Error:', e)
 
-        csv_obj.change_data(self.pump_name, self.get_last()) #when exciting out loop as well
+        if self.csv_obj:
+            self.csv_obj.change_data(self.pump_name, self.get_last()) #when exciting out loop as well
 
     def get_last(self):
         if self.mass and self.flow_rate and self.pid_output:
@@ -196,8 +205,9 @@ class csv_file:
         self.pumps_data = {pump: ['','',''] for pump in pump_list}
 
         human_time = datetime.now()
-        csv_filename = str(human_time).replace(':', '.') + '.csv'
-        self.csv_file = open(csv_filename, 'w', newline='', encoding="utf-8")
+        self.filename = str(human_time).replace(':', '.')
+        self.csv_filename = self.filename + '.csv'
+        self.csv_file = open(self.csv_filename, 'w', newline='', encoding="utf-8")
 
         self.stopped = False
 
@@ -224,6 +234,22 @@ class csv_file:
             self.csv_file.flush()
 
             time.sleep(.2)
+
+        # self.csv_file.close()
+        # wb = Workbook()
+        # ws = wb.active
+        # ws.title = self.csv_filename
+        # data = open(self.csv_filename)
+        # csv_data = list(csv.reader(data)) #Method used to open and read a csv file
+        # for i in csv_data:
+        #     ws.append(i)
+        # data.close()
+        # wb.save(self.filename + '.xlsx')
+
+        # #delete the original csv file
+        # file = self.csv_filename
+        # if(os.path.exists(file) and os.path.isfile(file)):
+        #     os.remove(file)
 
     def stop_file(self):
         self.stopped = True
