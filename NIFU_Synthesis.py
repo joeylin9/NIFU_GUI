@@ -1,7 +1,7 @@
 import tkinter as tk
 import threading
 from NIFU_Serial import Pump, Balance
-from NIFU_pid import pid_control
+from NIFU_pid import pid_control, csv_file
 
 #replace with correct values
 pump1_controller = {'set_point': None, 'kp': 0.1, 'ki': 0.0001, 'kd': 0.01, 'integral_error_limit': 100}
@@ -76,6 +76,7 @@ class NIFU_Synthesis:
         self.pump_connect_vars = [False] * len(self.pumps_list)
         self.pump_connect_buttons = []
         self.pump_sers = [None] * len(self.pumps_list)
+        self.balance_sers = [None] * len(self.pumps_list)
         self.pump_on_buttons = []
         self.pump_off_buttons = []
         self.pump_flow_entry_vars = []
@@ -114,7 +115,6 @@ class NIFU_Synthesis:
         self.pump_type_vars = [None for i in self.pumps_list]
         self.pump_port_vars = [None for i in self.pumps_list]
         self.balance_port_vars = [None for i in self.pumps_list]
-        self.flow_rate_csv_vars = [None for i in self.pumps_list]
 
         ### --- VALVES --- ###
         valves_frame = tk.Frame(equipment_frame)
@@ -244,10 +244,10 @@ class NIFU_Synthesis:
         self.start_button.grid(row=0, column=0)
         self.stop_button = tk.Button(graph_buttons_table_frame, text='Stop', width=15, activebackground='IndianRed1', command=self.change_stop_button)
         self.stop_button.grid(row=1, column=0)
-        update_button = tk.Button(graph_buttons_table_frame, text='Update', width=15)
-        update_button.grid(row=2, column=0)
-        get_data_button = tk.Button(graph_buttons_table_frame, text='Get Data', width=15)
-        get_data_button.grid(row=3, column=0)
+        self.start_csv_button = tk.Button(graph_buttons_table_frame, text='Start Reading Data', width=15, command=self.start_csv)
+        self.start_csv_button.grid(row=2, column=0)
+        self.stop_csv_button = tk.Button(graph_buttons_table_frame, text='End Reading Data', width=15, activebackground='IndianRed1', command=self.stop_csv)
+        self.stop_csv_button.grid(row=3, column=0)
 
         #table
         tk.Text(graph_buttons_table_frame, width=20, height=20, bg='gray').grid(row=4, column=0, pady=(25,0))
@@ -355,19 +355,25 @@ class NIFU_Synthesis:
 
     #pumps
     def pump_connect(self, pump_index):
-        if self.pump_connect_vars[pump_index]:  # If already connected
-            self.pump_connect_vars[pump_index] = False
-            self.pump_connect_buttons[pump_index].config(bg='SystemButtonFace', text='Disconnected')  # Change back to default color
-
-            ser = self.pump_sers[pump_index]
-            ser.pump_disconnect()
-
-        else:  # If not connected
+        if not self.pump_connect_vars[pump_index]:  # If not connected
             self.pump_connect_vars[pump_index] = True
             self.pump_connect_buttons[pump_index].config(bg='LightSkyBlue1', text='Connected')  # Change to blue color
 
-            p = Pump.pump_connect(self, self.pump_port_vars[pump_index].get())
-            self.pump_sers[pump_index] = p
+            p_ser = Pump.pump_connect(self, self.pump_port_vars[pump_index].get())
+            self.pump_sers[pump_index] = p_ser
+
+            b_ser = Balance.balance_connect(self, self.balance_port_vars[pump_index].get())
+            self.balance_sers[pump_index] = b_ser
+
+        else:  # If already connected
+            self.pump_connect_vars[pump_index] = False
+            self.pump_connect_buttons[pump_index].config(bg='SystemButtonFace', text='Disconnected')  # Change back to default color
+
+            p_ser = self.pump_sers[pump_index]
+            Pump.pump_disconnect(self, p_ser)
+
+            b_ser = self.balance_sers[pump_index]
+            Balance.balance_disconnect(self, b_ser)
 
     def pump_on(self, pump_index):
         self.pump_on_buttons[pump_index].config(bg='pale green')
@@ -375,8 +381,8 @@ class NIFU_Synthesis:
 
         if self.pump_connect_vars[pump_index]: #if connected
             pump_type = self.pump_type_vars[pump_index].get().upper()
-
             ser=self.pump_sers[pump_index]
+
             if pump_type == 'ELDEX':
                 Pump.eldex_pump_command(self, ser, command='RU')
             elif pump_type == 'UI-22':
@@ -401,29 +407,30 @@ class NIFU_Synthesis:
 
     def pump_set_flow_rate(self, index):
         if self.pump_connect_vars[index]: #if connected, assumes pump is on
-            balance_port_number = str(self.balance_port_vars[index].get())
-            pump_port_number = str(self.pump_port_vars[index].get())
-            flow_rate = self.pump_flow_entry_vars[index].get()
+            flow_rate = float(self.pump_flow_entry_vars[index].get())
+            flow_rate = f'{flow_rate:06.3f}'
             pump_type = self.pump_type_vars[index].get().upper()
+            p_ser=self.pump_sers[index]
+            b_ser=self.balance_sers[index]
+            pump_controller = pump_controllers[index]
+            pump_controller['set_point'] = float(flow_rate)
 
             c = self.pump_pid_classes[index]
             if c:
                 c.set_off()
 
-            ser=self.pump_sers[index]
             if pump_type == 'ELDEX':
-                Pump.eldex_pump_command(self, ser, command='SF', value=flow_rate)
+                Pump.eldex_pump_command(self, p_ser, command='SF', value=flow_rate)
             elif pump_type == 'UI-22':
-                Pump.UI22_pump_command(self, ser, command='S3', value=flow_rate)
+                flow_rate = flow_rate.replace('.', '')
+                Pump.UI22_pump_command(self, p_ser, command='S3', value=flow_rate)
 
-            pump_controller = pump_controllers[index]
-            pump_controller['set_point'] = float(flow_rate)
-            c = pid_control(balance_port_number, pump_port_number, pump_controller, pump_type)
+            c = pid_control(b_ser, p_ser, pump_controller, pump_type, self.pumps_list[index])
             self.pump_pid_classes[index] = c
 
-            t = threading.Thread(target=c.start_pid, args=(self.flow_rate_csv_vars[index].get(),))
-            t.daemon = True
-            t.start()
+            t_pid = threading.Thread(target=c.start_pid, args=(self.csv_obj,))
+            t_pid.daemon = True
+            t_pid.start()
 
     def change_valves(self):
         for i, valve_name in enumerate(self.valves_dict):
@@ -474,7 +481,6 @@ class NIFU_Synthesis:
         tk.Label(pump_frame, text='Pump Type', font=('TkDefaultFont', 9, 'underline')).grid(row=0, column=1)
         tk.Label(pump_frame, text='Pump Port Number', font=('TkDefaultFont', 9, 'underline')).grid(row=0, column=2)
         tk.Label(pump_frame, text='Balance Port Number', font=('TkDefaultFont', 9, 'underline')).grid(row=0, column=3)
-        tk.Label(pump_frame, text='CSV File Name', font=('TkDefaultFont', 9, 'underline')).grid(row=0, column=4)
 
         # self.balance_save_vars = [tk.BooleanVar() for i in self.pumps_list]
 
@@ -505,16 +511,6 @@ class NIFU_Synthesis:
 
             # tk.Checkbutton(pump_frame, text='Save', variable=self.balance_save_vars[i]).grid(row=i+1, column=6)
 
-            #csv file names
-            self.flow_rate_csv_var = tk.StringVar()
-            if not self.flow_rate_csv_vars[i]:
-                self.flow_rate_csv_var.set('Pump'+str(i+1))
-            else:
-                self.flow_rate_csv_var.set(self.flow_rate_csv_vars[i].get())
-            flow_rate_csv_entry = tk.Entry(pump_frame, textvariable=self.flow_rate_csv_var)
-            flow_rate_csv_entry.grid(row=i+1, column=4, padx=5)
-            self.flow_rate_csv_vars[i] = (self.flow_rate_csv_var)
-
         pump_frame.pack(pady=10)
 
     #graph data functions
@@ -524,6 +520,20 @@ class NIFU_Synthesis:
 
     def change_stop_button(self):
         self.start_button.config(background='SystemButtonFace')
+
+    def start_csv(self):
+        self.start_csv_button.config(background='pale green')
+        self.stop_csv_button.config(background='SystemButtonFace')
+
+        self.csv_obj = csv_file(self.pumps_list)
+        t_csv = threading.Thread(target=self.csv_obj.start_file)
+        t_csv.daemon = True
+        t_csv.start()
+
+    def stop_csv(self):
+        self.start_csv_button.config(background='SystemButtonFace')
+
+        self.csv_obj.stop_file()
 
     def update_plot_checkboxes(self, *args):
         frames = [
