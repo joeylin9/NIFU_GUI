@@ -1,34 +1,30 @@
 import time
 from scipy.stats import linregress
-import serial
 from datetime import datetime
 import collections
 
 class pid_control:
-    def __init__(self, balance_port, pump_port, pump_controller, pump_type):
-        self.balance_port = balance_port
-        self.pump_port = pump_port
+    def __init__(self, balance_ser, pump_ser, pump_controller, pump_type, pump_name):
+        self.balance_ser = balance_ser
+        self.pump_ser = pump_ser
         p = pump_controller
         self.pump_controller = self.pid(p['set_point'], p['kp'], p['ki'], p['kd'], p['integral_error_limit'])
         self.pump_type = pump_type
+        self.pump_name = pump_name
         self.max_data_points = 10
+
+        self.mass = None
+        self.flow_rate = None
+        self.pid_output = None
 
         self.stop = False
 
-    def set_balance_port(self, port):
-        self.balance_port = port
-
-    def set_pump_port(self, port):
-        self.pump_port = port
-
-    def set_pump_controller_set_point(self, set_point):
-        self.pump_controller._set_point = float(set_point)
-
-    def set_pump_type(self, pump_type):
-        self.pump_type = pump_type
-
     def set_off(self):
         self.stop = True
+
+        self.mass = None
+        self.flow_rate = None
+        self.pid_output = None
 
     class pid:
         def __init__(self, set_point, kp, ki, kd, integral_error_limit):
@@ -140,21 +136,10 @@ class pid_control:
             except:
                 return 0.0
 
-    def start_pid(self, filename):
-        balance_ser = serial.Serial(port=self.balance_port, baudrate = 9600, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
-                                    bytesize=serial.EIGHTBITS, timeout=0.2)
-        pump_ser = serial.Serial(port=self.pump_port, baudrate=9600, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
-                            bytesize=serial.EIGHTBITS, timeout=1)
+    def start_pid(self, csv_obj):
+        balance_ser = self.balance_ser
+        pump_ser = self.pump_ser
         b = self.Balance(self.max_data_points)
-
-        #for csv file
-        csv_filename = filename + '.csv'
-
-        # Open CSV file for writing
-        try:
-            csv_file = open(csv_filename, 'w', newline='')
-        except:
-            print("bad file")
 
         last_flow_rate = 0.0
         while not self.stop:
@@ -169,22 +154,17 @@ class pid_control:
                     mass_in_float = float(value.split('g')[0])
                     b.mass = mass_in_float
                     flow_rate = -(b.flow_rate)
-                    print('current flow rate:', flow_rate)
 
                     if flow_rate != last_flow_rate:
                         output = float(self.pump_controller(flow_rate))
-
+                        print('current flow rate:', flow_rate)
+                        print('updated flow rate:', output)
                         output_str = f'{output:06.3f}' #assumes output is less than 100 and nonnegative
-                        if self.pump_type == 'ELDEX':
-                            # print('updated flow rate:', output_str)
 
+                        if self.pump_type == 'ELDEX':
                             #put flow rate into eldex pump command
                             command_str = f'SF{output_str}\r\n'
                             pump_ser.write(command_str.encode('ascii'))
-
-                            # Read and print the response from the pump
-                            # pump_response = pump_ser.readline().decode('ascii')
-                            # print('pump response:', pump_response)
 
                         elif self.pump_type == 'UI-22':
                             output_str = output_str.replace('.', '')
@@ -193,14 +173,57 @@ class pid_control:
 
                     last_flow_rate = flow_rate
 
-                human_time = datetime.now()
-                log_time = human_time.timestamp()
-                print(f'{human_time}')
-
-                csv_file.write(f'{log_time},{human_time},{mass_in_float},{flow_rate},{output}\n')
-                csv_file.flush()
+                self.mass = mass_in_float
+                self.flow_rate = flow_rate
+                self.pid_output = output
+                csv_obj.change_data(self.pump_name, self.get_last())
 
                 time.sleep(.1)
 
             except Exception as e:
                 print('Error:', e)
+
+        csv_obj.change_data(self.pump_name, self.get_last()) #when exciting out loop as well
+
+    def get_last(self):
+        if self.mass and self.flow_rate and self.pid_output:
+            return [self.mass, self.flow_rate, self.pid_output]
+        else:
+            return ['','','']
+
+class csv_file:
+    def __init__(self, pump_list):
+        self.pumps_data = {pump: ['','',''] for pump in pump_list}
+
+        human_time = datetime.now()
+        csv_filename = str(human_time).replace(':', '.') + '.csv'
+        self.csv_file = open(csv_filename, 'w', newline='', encoding="utf-8")
+
+        self.stopped = False
+
+    def change_data(self, pump, data):
+        #data should be an array of [mass, flow rate, pid value]
+        self.pumps_data[pump] = data
+
+    def start_file(self):
+        heading = 'Time,'
+        for pump in self.pumps_data:
+            heading += pump + ': Mass (g),' + pump + ': Flow Rate (g/min),' + pump + ': PID Value (mL/min),'
+        self.csv_file.write(f'{heading}\n')
+
+        while not self.stopped:
+            human_time = datetime.now()
+
+            self.csv_file.write(f'{human_time},')
+            for p in self.pumps_data:
+                mass = self.pumps_data[p][0]
+                flow_rate = self.pumps_data[p][1]
+                pid_value = self.pumps_data[p][2]
+                self.csv_file.write(f'{mass},{flow_rate},{pid_value},')
+            self.csv_file.write('\n')
+            self.csv_file.flush()
+
+            time.sleep(.2)
+
+    def stop_file(self):
+        self.stopped = True
