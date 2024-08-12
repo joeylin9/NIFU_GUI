@@ -1,7 +1,7 @@
 import tkinter as tk
 import threading
 from NIFU_Serial import Pump, Balance
-from NIFU_pid import pid_control, csv_file
+from NIFU_pid import pid_control, excel_file
 
 #replace with correct values
 pump1_controller = {'set_point': None, 'kp': 0.1, 'ki': 0.0001, 'kd': 0.01, 'integral_error_limit': 100}
@@ -54,7 +54,7 @@ class NIFU_Synthesis:
 
         ### ---EQUIPMENT--- ###
         equipment_frame = tk.Frame(gui_frame)
-        self.csv_obj = None
+        self.excel_obj = None
 
         ### --- PUMPS --- ###
         pumps_frame = tk.Frame(equipment_frame)
@@ -246,10 +246,10 @@ class NIFU_Synthesis:
         self.start_button.grid(row=0, column=0)
         self.stop_button = tk.Button(graph_buttons_table_frame, text='Stop', width=15, activebackground='IndianRed1', command=self.change_stop_button)
         self.stop_button.grid(row=1, column=0)
-        self.start_csv_button = tk.Button(graph_buttons_table_frame, text='Start Reading Data', width=15, command=self.start_csv)
-        self.start_csv_button.grid(row=2, column=0)
-        self.stop_csv_button = tk.Button(graph_buttons_table_frame, text='End Reading Data', width=15, activebackground='IndianRed1', command=self.stop_csv)
-        self.stop_csv_button.grid(row=3, column=0)
+        self.start_excel_button = tk.Button(graph_buttons_table_frame, text='Start Reading Data', width=15, command=self.start_excel)
+        self.start_excel_button.grid(row=2, column=0)
+        self.stop_excel_button = tk.Button(graph_buttons_table_frame, text='End Reading Data', width=15, activebackground='IndianRed1', command=self.stop_excel)
+        self.stop_excel_button.grid(row=3, column=0)
 
         #table
         tk.Text(graph_buttons_table_frame, width=20, height=20, bg='gray').grid(row=4, column=0, pady=(25,0))
@@ -429,7 +429,7 @@ class NIFU_Synthesis:
 
             c = pid_control(b_ser, p_ser, pump_controller, pump_type, self.pumps_list[index], matrix_lengths[index])
             self.pump_pid_classes[index] = c
-            c.set_csv_obj(self.csv_obj)
+            c.set_excel_obj(self.excel_obj)
 
             t_pid = threading.Thread(target=c.start_pid)
             t_pid.daemon = True
@@ -524,24 +524,24 @@ class NIFU_Synthesis:
     def change_stop_button(self):
         self.start_button.config(background='SystemButtonFace')
 
-    def start_csv(self):
-        self.start_csv_button.config(background='pale green')
-        self.stop_csv_button.config(background='SystemButtonFace')
+    def start_excel(self):
+        self.start_excel_button.config(background='pale green')
+        self.stop_excel_button.config(background='SystemButtonFace')
 
-        print('Writing data into csv file...')
-        self.csv_obj = csv_file(self.pumps_list)
+        print('Writing data into excel file...')
+        self.excel_obj = excel_file(self.pumps_list)
         for c in self.pump_pid_classes:
             if c:
-                c.set_csv_obj(self.csv_obj)
-        t_csv = threading.Thread(target=self.csv_obj.start_file)
-        t_csv.daemon = True
-        t_csv.start()
+                c.set_excel_obj(self.excel_obj)
+        t_excel = threading.Thread(target=self.excel_obj.start_file)
+        t_excel.daemon = True
+        t_excel.start()
 
-    def stop_csv(self):
-        self.start_csv_button.config(background='SystemButtonFace')
+    def stop_excel(self):
+        self.start_excel_button.config(background='SystemButtonFace')
 
-        print('Stopping csv file...')
-        self.csv_obj.stop_file()
+        print('Stopping excel file...')
+        self.excel_obj.stop_file()
 
     def update_plot_checkboxes(self, *args):
         frames = [
