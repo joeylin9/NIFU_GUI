@@ -3,8 +3,6 @@ from scipy.stats import linregress
 from datetime import datetime
 import collections
 from openpyxl import Workbook
-import csv
-import os
 
 class pid_control:
     def __init__(self, balance_ser, pump_ser, pump_controller, pump_type, pump_name, matrix_len):
@@ -16,7 +14,7 @@ class pid_control:
         self.pump_name = pump_name
         self.max_data_points = matrix_len
 
-        self.csv_obj = None
+        self.excel_obj = None
         self.mass = None
         self.flow_rate = None
         self.pid_output = None
@@ -30,8 +28,8 @@ class pid_control:
         self.flow_rate = None
         self.pid_output = None
 
-    def set_csv_obj(self, csv_obj):
-        self.csv_obj = csv_obj
+    def set_excel_obj(self, excel_obj):
+        self.excel_obj = excel_obj
 
     class pid:
         def __init__(self, set_point, kp, ki, kd, integral_error_limit):
@@ -183,16 +181,16 @@ class pid_control:
                 self.mass = mass_in_float
                 self.flow_rate = flow_rate
                 self.pid_output = output
-                if self.csv_obj:
-                    self.csv_obj.change_data(self.pump_name, self.get_last())
+                if self.excel_obj:
+                    self.excel_obj.change_data(self.pump_name, self.get_last())
 
                 time.sleep(.1)
 
             except Exception as e:
                 print('Error:', e)
 
-        if self.csv_obj:
-            self.csv_obj.change_data(self.pump_name, self.get_last()) #when exciting out loop as well
+        if self.excel_obj:
+            self.excel_obj.change_data(self.pump_name, self.get_last()) #when exciting out loop as well
 
     def get_last(self):
         if self.mass and self.flow_rate and self.pid_output:
@@ -200,14 +198,30 @@ class pid_control:
         else:
             return ['','','']
 
-class csv_file:
-    def __init__(self, pump_list):
+class excel_file:
+    def __init__(self, pump_list, pump_controllers, matrix_lenghts):
         self.pumps_data = {pump: ['','',''] for pump in pump_list}
 
         human_time = datetime.now()
-        self.filename = str(human_time).replace(':', '.')
-        self.csv_filename = self.filename + '.csv'
-        self.csv_file = open(self.csv_filename, 'w', newline='', encoding="utf-8")
+        self.filename = str(human_time).replace(':', '.') + 'xlsx'
+        self.workbook = Workbook()
+
+        #For the descriptions/constants
+        self.sheet1 = self.workbook.active
+        self.sheet1.title = 'Descriptions'
+        heading1 = [f'Pump{x+1}' for x in range(10)]
+        self.sheet1.append(heading1)
+        self.sheet1.append(pump_controllers)
+        self.sheet1.append(matrix_lenghts)
+
+        self.sheet2 = self.workbook.active
+        self.sheet2.title = 'Data'
+        heading2 = ['Time']
+        for pump in self.pumps_data:
+            heading2.append(pump + ': Mass (g)')
+            heading2.append(pump + ': Flow Rate (g/min)')
+            heading2.append(pump + ': PID Value (mL/min)')
+        self.sheet2.append(heading2)
 
         self.stopped = False
 
@@ -216,40 +230,18 @@ class csv_file:
         self.pumps_data[pump] = data
 
     def start_file(self):
-        heading = 'Time,'
-        for pump in self.pumps_data:
-            heading += pump + ': Mass (g),' + pump + ': Flow Rate (g/min),' + pump + ': PID Value (mL/min),'
-        self.csv_file.write(f'{heading}\n')
-
         while not self.stopped:
             human_time = datetime.now()
-
-            self.csv_file.write(f'{human_time},')
+            data_line = [human_time]
             for p in self.pumps_data:
                 mass = self.pumps_data[p][0]
                 flow_rate = self.pumps_data[p][1]
                 pid_value = self.pumps_data[p][2]
-                self.csv_file.write(f'{mass},{flow_rate},{pid_value},')
-            self.csv_file.write('\n')
-            self.csv_file.flush()
-
+                data_line.append(mass, flow_rate, pid_value)
+            self.sheet2.append(data_line)
             time.sleep(.2)
-
-        # self.csv_file.close()
-        # wb = Workbook()
-        # ws = wb.active
-        # ws.title = self.csv_filename
-        # data = open(self.csv_filename)
-        # csv_data = list(csv.reader(data)) #Method used to open and read a csv file
-        # for i in csv_data:
-        #     ws.append(i)
-        # data.close()
-        # wb.save(self.filename + '.xlsx')
-
-        # #delete the original csv file
-        # file = self.csv_filename
-        # if(os.path.exists(file) and os.path.isfile(file)):
-        #     os.remove(file)
 
     def stop_file(self):
         self.stopped = True
+        self.workbook.close()
+        self.workbook.save(self.filename)
