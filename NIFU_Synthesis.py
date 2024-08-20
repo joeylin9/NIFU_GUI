@@ -1,7 +1,10 @@
 import tkinter as tk
 import threading
 from NIFU_Serial import Pump, Balance
-from NIFU_pid import pid_control, excel_file
+from NIFU_pid import pid_control, excel_file, graph
+import time
+from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
+from matplotlib.figure import Figure
 
 #replace with correct values
 pump1_controller = {'set_point': None, 'kp': 0.1, 'ki': 0.0001, 'kd': 0.01, 'integral_error_limit': 100}
@@ -64,17 +67,8 @@ class NIFU_Synthesis:
         tk.Label(pumps_frame, text='Off', font=('Arial', 12, 'bold')).grid(row=0, column=3)
         tk.Label(pumps_frame, text='Flow Rate', font=('Arial', 12, 'bold')).grid(row=0, column=4)
         tk.Label(pumps_frame, text='Set Flow Rate', font=('Arial', 12, 'bold')).grid(row=0, column=5)
-        self.pumps_list = ['Pump 1: HNO₃',
-            'Pump 2: Acetic anhydride',
-            'Pump 3: Furfural',
-            'Pump 4: KOH',
-            'Pump 5: 2MeTHF',
-            'Pump 6: Organic',
-            'Pump 7: Aqueous',
-            'Pump 8: H₂SO₄',
-            'Pump 9: Amionhydantoin',
-            'Pump 10: Crude NIFU Out'
-        ]
+        self.pumps_list = ['HNO₃','Acetic anhydride','Furfural','KOH','2MeTHF','Organic',
+                            'Aqueous','H₂SO₄','Amionhydantoin','Crude NIFU Out']
         self.pump_connect_vars = [False] * len(self.pumps_list)
         self.pump_connect_buttons = []
         self.pump_sers = [None] * len(self.pumps_list)
@@ -87,7 +81,7 @@ class NIFU_Synthesis:
 
         for i, pump_name in enumerate(self.pumps_list):
             # Pump names
-            tk.Label(pumps_frame, text=pump_name).grid(row=i+1, column=0, sticky='w')
+            tk.Label(pumps_frame, text=f'Pump {i+1}: {pump_name}').grid(row=i+1, column=0, sticky='w')
 
             # Connect buttons
             pump_connect_button = tk.Button(pumps_frame, text='Disconnected', width=12, command=lambda i=i: self.pump_connect(i))
@@ -220,14 +214,25 @@ class NIFU_Synthesis:
         data_frame = tk.Frame(gui_frame)
         tk.Label(data_frame, text="Graph Data", font=('Arial', 16, 'underline')).grid(row=0, column=0, pady=10, sticky='nw')
 
+        self.g = graph()
+        self.plot_temperatures = {'HNO₃':False, 'Furfural':False, 'KOH':False, '2MeTHF':False,
+                            'Aq-Org Separator':False, 'H₂SO₄':False, 'Aminohydantoin':False}
+        self.plot_pressures = {'HNO₃':False, 'Furfural':False, 'KOH':False, 'H₂SO₄':False, 'Aminohydantoin':False}
+        self.plot_balances = {'HNO₃': False, 'Acetic anhydride': False, 'Furfural': False, 'KOH': False, '2MeTHF': False,
+                        'Aqueous': False, 'H₂SO₄': False, 'Aminohydantoin': False, 'Crude NIFU Out': False}
+        self.plot_flow_rates = {'HNO₃': False, 'Acetic anhydride': False, 'Reactor 1': False, 'Furfural': False,
+                        'KOH': False, '2MeTHF': False, 'H₂SO₄': False, 'Aminohydantoin': False, 'Crude NIFU Out': False}
+        self.data_type_dict_objects = [self.plot_temperatures, self.plot_pressures, self.plot_balances, self.plot_flow_rates]
+
         #Checkboxes for different data
         data_types_frame = tk.Frame(data_frame)
         self.data_types = ['Temperature (°C)', 'Pressure (psi)', 'Balance (g)', 'Flow Rate (mL/min)']
-        self.data_types_var = [tk.BooleanVar() for data_type in self.data_types]
+        self.data_types_vars = [tk.BooleanVar() for data_type in self.data_types]
         for index, value in enumerate(self.data_types):
-            data_types_checkbox = tk.Checkbutton(data_types_frame, text=value, variable=self.data_types_var[index])
+            data_types_checkbox = tk.Checkbutton(data_types_frame, text=value, variable=self.data_types_vars[index],
+                                                 command=lambda v=value, o=self.data_type_dict_objects[index]: self.g.big_checkmark(v, o))
             data_types_checkbox.grid(row=0, column=index)
-            self.data_types_var[index].trace_add('write', self.update_plot_checkboxes)
+            self.data_types_vars[index].trace_add('write', self.update_plot_checkboxes)
         data_types_frame.grid(row=1, column=0, sticky='w')
 
         #graph and graph buttons
@@ -236,25 +241,30 @@ class NIFU_Synthesis:
         graph_frame.columnconfigure(1, weight=1)
 
         # graph_display
-        graph_display_frame = tk.Frame(graph_frame, width=600, height=450, bg='white')
+        self.graph_display_frame = tk.Frame(graph_frame, width=800, height=500, bg='white')
+        self.figure = Figure(figsize = (8,5), dpi = 100)
+        self.plot = self.figure.add_subplot(111)
+        self.canvas = FigureCanvasTkAgg(self.figure, master=self.graph_display_frame)
+        self.canvas.draw()
+        self.canvas.get_tk_widget().pack()
 
         #graph_buttons_table
         graph_buttons_table_frame = tk.Frame(graph_frame)
 
         #buttons
-        self.start_button = tk.Button(graph_buttons_table_frame, text='Start', width=15, command=self.change_start_button)
+        self.start_button = tk.Button(graph_buttons_table_frame, text='Start', width=20, command=self.change_start_button)
         self.start_button.grid(row=0, column=0)
-        self.stop_button = tk.Button(graph_buttons_table_frame, text='Stop', width=15, activebackground='IndianRed1', command=self.change_stop_button)
+        self.stop_button = tk.Button(graph_buttons_table_frame, text='Stop', width=20, activebackground='IndianRed1', command=self.change_stop_button)
         self.stop_button.grid(row=1, column=0)
-        self.start_excel_button = tk.Button(graph_buttons_table_frame, text='Start Reading Data', width=15, command=self.start_excel)
+        self.start_excel_button = tk.Button(graph_buttons_table_frame, text='Start Reading Data', width=20, command=self.start_excel)
         self.start_excel_button.grid(row=2, column=0)
-        self.stop_excel_button = tk.Button(graph_buttons_table_frame, text='End Reading Data', width=15, activebackground='IndianRed1', command=self.stop_excel)
+        self.stop_excel_button = tk.Button(graph_buttons_table_frame, text='End Reading Data', width=20, activebackground='IndianRed1', command=self.stop_excel)
         self.stop_excel_button.grid(row=3, column=0)
 
         #table
-        tk.Text(graph_buttons_table_frame, width=20, height=20, bg='gray').grid(row=4, column=0, pady=(25,0))
+        tk.Text(graph_buttons_table_frame, width=30, height=23, bg='gray').grid(row=4, column=0, pady=(25,0))
 
-        graph_display_frame.grid(row=0, column=0, sticky='N')
+        self.graph_display_frame.grid(row=0, column=0, sticky='N')
         graph_buttons_table_frame.grid(row=0, column=1, sticky='n', padx=20)
         graph_frame.grid(row=2, column=0, sticky='w')
 
@@ -267,13 +277,13 @@ class NIFU_Synthesis:
         self.plot_temperature_name.grid(row=0, column=0, sticky='nw')
         self.plot_temperature_name.grid_remove()
 
-        self.plot_temperatures = ['HNO₃', 'Furfural', 'KOH', '2MeTHF', 'Aq-Org Separator', 'H₂SO₄', 'Aminohydantoin']
-        self.plot_temperatures_var = [tk.BooleanVar() for _ in self.plot_temperatures]
+        self.plot_temperatures_vars = [tk.BooleanVar() for _ in self.plot_temperatures]
         self.plot_temperatures_checkboxes = []
         self.plot_temperatures_frame = tk.Frame(self.plot_frame)
 
         for index, value in enumerate(self.plot_temperatures):
-            plot_temperatures_checkbox = tk.Checkbutton(self.plot_temperatures_frame, text=value, variable=self.plot_temperatures_var[index])
+            plot_temperatures_checkbox = tk.Checkbutton(self.plot_temperatures_frame, text=value, variable=self.plot_temperatures_vars[index],
+                                                        command=lambda v=value: self.g.checkmark('temperature', v))
             self.plot_temperatures_checkboxes.append(plot_temperatures_checkbox)
             plot_temperatures_checkbox.grid(row=0, column=index, sticky='w')
             plot_temperatures_checkbox.grid_remove()
@@ -285,13 +295,13 @@ class NIFU_Synthesis:
         self.plot_pressure_name.grid(row=1, column=0, sticky='nw')
         self.plot_pressure_name.grid_remove()
 
-        self.plot_pressures = ['HNO₃', 'Furfural', 'KOH', 'H₂SO₄', 'Aminohydantoin']
-        self.plot_pressures_var = [tk.BooleanVar() for _ in self.plot_pressures]
+        self.plot_pressures_vars = [tk.BooleanVar() for _ in self.plot_pressures]
         self.plot_pressures_checkboxes = []
         self.plot_pressures_frame = tk.Frame(self.plot_frame)
 
         for index, value in enumerate(self.plot_pressures):
-            plot_pressures_checkbox = tk.Checkbutton(self.plot_pressures_frame, text=value, variable=self.plot_pressures_var[index])
+            plot_pressures_checkbox = tk.Checkbutton(self.plot_pressures_frame, text=value, variable=self.plot_pressures_vars[index],
+                                                        command=lambda v=value: self.g.checkmark('pressure', v))
             self.plot_pressures_checkboxes.append(plot_pressures_checkbox)
             plot_pressures_checkbox.grid(row=0, column=index, sticky='w')
             plot_pressures_checkbox.grid_remove()
@@ -303,19 +313,15 @@ class NIFU_Synthesis:
         self.plot_balance_name.grid(row=2, column=0, sticky='nw')
         self.plot_balance_name.grid_remove()
 
-        self.plot_balances = ['HNO₃', 'Acetic anhydride', 'Furfural', 'KOH', '2MeTHF',
-                              'Aqueous', 'H₂SO₄', 'Aminohydantoin', 'Crude NIFU Out']
-        self.plot_balances_var = [tk.BooleanVar() for _ in self.plot_balances]
+        self.plot_balances_vars = [tk.BooleanVar() for _ in self.plot_balances]
         self.plot_balances_checkboxes = []
         self.plot_balances_frame = tk.Frame(self.plot_frame)
 
         for index, value in enumerate(self.plot_balances):
-            plot_balances_checkbox = tk.Checkbutton(self.plot_balances_frame, text=value, variable=self.plot_balances_var[index])
+            plot_balances_checkbox = tk.Checkbutton(self.plot_balances_frame, text=value, variable=self.plot_balances_vars[index],
+                                                        command=lambda v=value: self.g.checkmark('balance', v))
             self.plot_balances_checkboxes.append(plot_balances_checkbox)
-            if index <= 5:
-                plot_balances_checkbox.grid(row=0, column=index, sticky='w')
-            else:
-                plot_balances_checkbox.grid(row=1, column=index-6, sticky='w')
+            plot_balances_checkbox.grid(row=0, column=index, sticky='w')
             plot_balances_checkbox.grid_remove()
 
         self.plot_balances_frame.grid(row=2, column=1, sticky='w')
@@ -325,23 +331,18 @@ class NIFU_Synthesis:
         self.plot_flowrate_name.grid(row=3, column=0, sticky='nw')
         self.plot_flowrate_name.grid_remove()
 
-        self.plot_flow_rates = ['HNO₃', 'Acetic anhydride', 'Reactor 1', 'Furfual', 'Reactor 2',
-                                'KOH', '2MeTHF', 'H₂SO₄', 'Aminohydantoin', 'Crude NIFU Out']
-        self.plot_flow_rates_var = [tk.BooleanVar() for _ in self.plot_flow_rates]
+        self.plot_flow_rates_vars = [tk.BooleanVar() for _ in self.plot_flow_rates]
         self.plot_flow_rates_checkboxes = []
         self.plot_flow_rates_frame = tk.Frame(self.plot_frame)
 
         for index, value in enumerate(self.plot_flow_rates):
-            plot_flow_rates_checkbox = tk.Checkbutton(self.plot_flow_rates_frame, text=value, variable=self.plot_flow_rates_var[index])
+            plot_flow_rates_checkbox = tk.Checkbutton(self.plot_flow_rates_frame, text=value, variable=self.plot_flow_rates_vars[index],
+                                                        command=lambda v=value: self.g.checkmark('flow rate', v))
             self.plot_flow_rates_checkboxes.append(plot_flow_rates_checkbox)
-            if index <= 5:
-                plot_flow_rates_checkbox.grid(row=0, column=index, sticky='w')
-            else:
-                plot_flow_rates_checkbox.grid(row=1, column=index-6, sticky='w')
+            plot_flow_rates_checkbox.grid(row=0, column=index, sticky='w')
             plot_flow_rates_checkbox.grid_remove()
 
         self.plot_flow_rates_frame.grid(row=3, column=1, sticky='w')
-
 
         self.plot_frame.grid(row=4, column=0, sticky='w')
         data_frame.grid(row=0, column=1, sticky='nw')
@@ -427,7 +428,7 @@ class NIFU_Synthesis:
                 flow_rate = flow_rate.replace('.', '')
                 Pump.UI22_pump_command(self, p_ser, command='S3', value=flow_rate)
 
-            c = pid_control(b_ser, p_ser, pump_controller, pump_type, self.pumps_list[index], matrix_lengths[index])
+            c = pid_control(b_ser, p_ser, pump_controller, pump_type, self.pumps_list[index], matrix_lengths[index], self.g)
             self.pump_pid_classes[index] = c
             c.set_excel_obj(self.excel_obj)
 
@@ -520,16 +521,21 @@ class NIFU_Synthesis:
     def change_start_button(self):
         self.start_button.config(background='pale green')
         self.stop_button.config(background='SystemButtonFace')
+        self.g.gui_plot_stop(False)
+        t = threading.Thread(target=self.g.plot, args=(self.plot, self.canvas))
+        t.daemon = True
+        t.start()
 
     def change_stop_button(self):
         self.start_button.config(background='SystemButtonFace')
+        self.g.gui_plot_stop(True)
 
     def start_excel(self):
         self.start_excel_button.config(background='pale green')
         self.stop_excel_button.config(background='SystemButtonFace')
 
         print('Writing data into excel file...')
-        self.excel_obj = excel_file(self.pumps_list)
+        self.excel_obj = excel_file(self.pumps_list, pump_controllers, matrix_lengths)
         for c in self.pump_pid_classes:
             if c:
                 c.set_excel_obj(self.excel_obj)
@@ -552,7 +558,7 @@ class NIFU_Synthesis:
         ]
 
         row = 0
-        for i, var in enumerate(self.data_types_var):
+        for i, var in enumerate(self.data_types_vars):
             name, checkboxes, frame = frames[i]
             if var.get():
                 name.grid(row=row, column=0, sticky='nw')
