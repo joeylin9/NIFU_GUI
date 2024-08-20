@@ -5,7 +5,7 @@ import collections
 from openpyxl import Workbook
 
 class pid_control:
-    def __init__(self, balance_ser, pump_ser, pump_controller, pump_type, pump_name, matrix_len):
+    def __init__(self, balance_ser, pump_ser, pump_controller, pump_type, pump_name, matrix_len, graph_obj):
         self.balance_ser = balance_ser
         self.pump_ser = pump_ser
         p = pump_controller
@@ -13,6 +13,7 @@ class pid_control:
         self.pump_type = pump_type
         self.pump_name = pump_name
         self.max_data_points = matrix_len
+        self.graph_obj = graph_obj
 
         self.excel_obj = None
         self.mass = None
@@ -184,6 +185,9 @@ class pid_control:
                 if self.excel_obj:
                     self.excel_obj.change_data(self.pump_name, self.get_last())
 
+                self.graph_obj.update_dict("balance", self.pump_name, self.mass)
+                self.graph_obj.update_dict("flow rate", self.pump_name, self.flow_rate)
+
                 time.sleep(.1)
 
             except Exception as e:
@@ -199,23 +203,23 @@ class pid_control:
             return ['','','']
 
 class excel_file:
-    def __init__(self, pump_list, pump_controllers, matrix_lenghts):
+    def __init__(self, pump_list, pump_controllers, matrix_lengths):
         self.pumps_data = {pump: ['','',''] for pump in pump_list}
 
         human_time = datetime.now()
-        self.filename = str(human_time).replace(':', '.') + 'xlsx'
+        self.filename = str(human_time).replace(':', '_') + '.xlsx'
         self.workbook = Workbook()
 
         #For the descriptions/constants
         self.sheet1 = self.workbook.active
         self.sheet1.title = 'Descriptions'
-        heading1 = [f'Pump{x+1}' for x in range(10)]
+        heading1 = [f'Pump{x+1}' for x in range(len(pump_list))]
         self.sheet1.append(heading1)
+        pump_controllers = [str(controller_dict) for controller_dict in pump_controllers]
         self.sheet1.append(pump_controllers)
-        self.sheet1.append(matrix_lenghts)
+        self.sheet1.append(matrix_lengths)
 
-        self.sheet2 = self.workbook.active
-        self.sheet2.title = 'Data'
+        self.sheet2 = self.workbook.create_sheet(title='Data')
         heading2 = ['Time']
         for pump in self.pumps_data:
             heading2.append(pump + ': Mass (g)')
@@ -237,11 +241,88 @@ class excel_file:
                 mass = self.pumps_data[p][0]
                 flow_rate = self.pumps_data[p][1]
                 pid_value = self.pumps_data[p][2]
-                data_line.append(mass, flow_rate, pid_value)
+                data_line.append(mass)
+                data_line.append(flow_rate)
+                data_line.append(pid_value)
             self.sheet2.append(data_line)
             time.sleep(.2)
 
     def stop_file(self):
         self.stopped = True
-        self.workbook.close()
         self.workbook.save(self.filename)
+        self.workbook.close()
+
+class graph:
+    def __init__(self, temperature_dict = None, pressure_dict = None, balance_dict = None, flow_rate_dict = None):
+        #are none when the plot checkmark is not checked
+        self.temperature_dict = temperature_dict
+        self.pressure_dict = pressure_dict
+        self.balance_dict = balance_dict
+        self.flow_rate_dict = flow_rate_dict
+
+        self.gui_plot_stopped = False
+
+    def big_checkmark(self, dict_type, dict_obj):
+        if dict_type == 'temperature':
+            self.temperature_dict = None if self.temperature_dict else dict_obj
+        elif dict_type == 'pressure':
+            self.pressure_dict = None if self.pressure_dict else dict_obj
+        elif dict_type == 'balance':
+            self.balance_dict = None if self.balance_dict else dict_obj
+        elif dict_type == 'flow rate':
+            self.flow_rate_dict = None if self.flow_rate_dict else dict_obj
+
+    def plot(self, plot, canvas):
+        while not self.gui_plot_stopped:
+            plot.clear()
+            if self.temperature_dict:
+                for var, var_list in self.temperature_dict.items():
+                    if var_list:
+                        plot.plot(var_list, label='Temperature: '+ var)
+            if self.pressure_dict:
+                for var, var_list in self.pressure_dict.items():
+                    if var_list:
+                        plot.plot(var_list, label='Pressure: '+ var)
+            if self.balance_dict:
+                for var, var_list in self.balance_dict.items():
+                    if var_list:
+                        plot.plot(var_list, label='Balance: '+ var)
+            if self.flow_rate_dict:
+                for var, var_list in self.flow_rate_dict.items():
+                    if var_list:
+                        plot.plot(var_list, label='Flow Rate: '+ var)
+            plot.legend()
+            canvas.draw()
+
+            time.sleep(1)
+
+    def update_dict(self, dict_type, name ,value):
+        d = self.get_dict_type(dict_type)
+
+        if d:
+            if d[name] != False:
+                d[name].append(value)
+
+    def checkmark(self, dict_type, name): #when checkmarking a plot variable (the specific data)
+        d = self.get_dict_type(dict_type)
+
+        if d:
+            if d[name] == False:
+                d[name] = []
+            else:
+                d[name] = False
+
+    def get_dict_type(self, dict_type):
+        if dict_type == 'temperature':
+            d = self.temperature_dict
+        elif dict_type == 'pressure':
+            d = self.pressure_dict
+        elif dict_type == 'balance':
+            d = self.balance_dict
+        elif dict_type == 'flow rate':
+            d = self.flow_rate_dict
+
+        return d
+
+    def gui_plot_stop(self, boolean):
+        self.gui_plot_stopped = boolean
