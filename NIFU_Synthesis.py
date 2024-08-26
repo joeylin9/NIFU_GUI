@@ -2,8 +2,7 @@ import tkinter as tk
 import threading
 from NIFU_Serial import Pump, Balance
 from NIFU_pid import pid_control, excel_file, graph
-import time
-from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
 #replace with correct values
@@ -78,6 +77,7 @@ class NIFU_Synthesis:
         self.pump_flow_entry_vars = []
 
         self.pump_pid_classes = [None] * len(self.pumps_list)
+        self.pid_vars = [tk.BooleanVar(value=True) for i in self.pumps_list]
 
         for i, pump_name in enumerate(self.pumps_list):
             # Pump names
@@ -105,6 +105,10 @@ class NIFU_Synthesis:
             # Set Flow Rate Button
             pump_set_flow_rate_button = tk.Button(pumps_frame, text='Set', width=5, command=lambda i=i: self.pump_set_flow_rate(i))
             pump_set_flow_rate_button.grid(row=i+1, column=5)
+
+            #use pid or no
+            data_types_checkbox = tk.Checkbutton(pumps_frame, text='PID', variable=self.pid_vars[i], command=lambda i=i: self.change_pid_onoff(i))
+            data_types_checkbox.grid(row=i+1, column=6)
 
         pumps_frame.pack(anchor='nw', padx=15)
 
@@ -214,23 +218,24 @@ class NIFU_Synthesis:
         data_frame = tk.Frame(gui_frame)
         tk.Label(data_frame, text="Graph Data", font=('Arial', 16, 'underline')).grid(row=0, column=0, pady=10, sticky='nw')
 
-        self.g = graph()
-        self.plot_temperatures = {'HNO₃':False, 'Furfural':False, 'KOH':False, '2MeTHF':False,
-                            'Aq-Org Separator':False, 'H₂SO₄':False, 'Aminohydantoin':False}
-        self.plot_pressures = {'HNO₃':False, 'Furfural':False, 'KOH':False, 'H₂SO₄':False, 'Aminohydantoin':False}
-        self.plot_balances = {'HNO₃': False, 'Acetic anhydride': False, 'Furfural': False, 'KOH': False, '2MeTHF': False,
-                        'Aqueous': False, 'H₂SO₄': False, 'Aminohydantoin': False, 'Crude NIFU Out': False}
-        self.plot_flow_rates = {'HNO₃': False, 'Acetic anhydride': False, 'Reactor 1': False, 'Furfural': False,
-                        'KOH': False, '2MeTHF': False, 'H₂SO₄': False, 'Aminohydantoin': False, 'Crude NIFU Out': False}
+        self.plot_temperatures = {'HNO₃':[False, False, []], 'Furfural':[False, False, []], 'KOH':[False, False, []], '2MeTHF':[False, False, []],
+                            'Aq-Org Separator':[False, False, []], 'H₂SO₄':[False, False, []], 'Aminohydantoin':[False, False, []]}
+        self.plot_pressures = {'HNO₃':[False, False, []], 'Furfural':[False, False, []], 'KOH':[False, False, []], 'H₂SO₄':[False, False, []], 'Aminohydantoin':[False, False, []]}
+        self.plot_balances = {'HNO₃':[False, False, []], 'Acetic anhydride':[False, False, []], 'Furfural':[False, False, []], 'KOH':[False, False, []], '2MeTHF':[False, False, []],
+                        'Aqueous':[False, False, []], 'H₂SO₄':[False, False, []], 'Aminohydantoin':[False, False, []], 'Crude NIFU Out':[False, False, []]}
+        self.plot_flow_rates = {'HNO₃':[False, False, []], 'Acetic anhydride':[False, False, []], 'Reactor 1':[False, False, []], 'Furfural':[False, False, []],
+                        'KOH':[False, False, []], '2MeTHF':[False, False, []], 'H₂SO₄':[False, False, []], 'Aminohydantoin':[False, False, []], 'Crude NIFU Out':[False, False, []]}
         self.data_type_dict_objects = [self.plot_temperatures, self.plot_pressures, self.plot_balances, self.plot_flow_rates]
+
+        self.g = graph(self.plot_temperatures, self.plot_pressures, self.plot_balances, self.plot_flow_rates)
 
         #Checkboxes for different data
         data_types_frame = tk.Frame(data_frame)
-        self.data_types = ['Temperature (°C)', 'Pressure (psi)', 'Balance (g)', 'Flow Rate (mL/min)']
+        self.data_types = ['Temperature', 'Pressure', 'Balance', 'Flow Rate']
         self.data_types_vars = [tk.BooleanVar() for data_type in self.data_types]
         for index, value in enumerate(self.data_types):
             data_types_checkbox = tk.Checkbutton(data_types_frame, text=value, variable=self.data_types_vars[index],
-                                                 command=lambda v=value, o=self.data_type_dict_objects[index]: self.g.big_checkmark(v, o))
+                                                 command=lambda v=value: self.g.big_checkmark(v))
             data_types_checkbox.grid(row=0, column=index)
             self.data_types_vars[index].trace_add('write', self.update_plot_checkboxes)
         data_types_frame.grid(row=1, column=0, sticky='w')
@@ -283,7 +288,7 @@ class NIFU_Synthesis:
 
         for index, value in enumerate(self.plot_temperatures):
             plot_temperatures_checkbox = tk.Checkbutton(self.plot_temperatures_frame, text=value, variable=self.plot_temperatures_vars[index],
-                                                        command=lambda v=value: self.g.checkmark('temperature', v))
+                                                        command=lambda v=value: self.g.checkmark('Temperature', v))
             self.plot_temperatures_checkboxes.append(plot_temperatures_checkbox)
             plot_temperatures_checkbox.grid(row=0, column=index, sticky='w')
             plot_temperatures_checkbox.grid_remove()
@@ -301,7 +306,7 @@ class NIFU_Synthesis:
 
         for index, value in enumerate(self.plot_pressures):
             plot_pressures_checkbox = tk.Checkbutton(self.plot_pressures_frame, text=value, variable=self.plot_pressures_vars[index],
-                                                        command=lambda v=value: self.g.checkmark('pressure', v))
+                                                        command=lambda v=value: self.g.checkmark('Pressure', v))
             self.plot_pressures_checkboxes.append(plot_pressures_checkbox)
             plot_pressures_checkbox.grid(row=0, column=index, sticky='w')
             plot_pressures_checkbox.grid_remove()
@@ -319,7 +324,7 @@ class NIFU_Synthesis:
 
         for index, value in enumerate(self.plot_balances):
             plot_balances_checkbox = tk.Checkbutton(self.plot_balances_frame, text=value, variable=self.plot_balances_vars[index],
-                                                        command=lambda v=value: self.g.checkmark('balance', v))
+                                                        command=lambda v=value: self.g.checkmark('Balance', v))
             self.plot_balances_checkboxes.append(plot_balances_checkbox)
             plot_balances_checkbox.grid(row=0, column=index, sticky='w')
             plot_balances_checkbox.grid_remove()
@@ -337,7 +342,7 @@ class NIFU_Synthesis:
 
         for index, value in enumerate(self.plot_flow_rates):
             plot_flow_rates_checkbox = tk.Checkbutton(self.plot_flow_rates_frame, text=value, variable=self.plot_flow_rates_vars[index],
-                                                        command=lambda v=value: self.g.checkmark('flow rate', v))
+                                                        command=lambda v=value: self.g.checkmark('Flow Rate', v))
             self.plot_flow_rates_checkboxes.append(plot_flow_rates_checkbox)
             plot_flow_rates_checkbox.grid(row=0, column=index, sticky='w')
             plot_flow_rates_checkbox.grid_remove()
@@ -418,23 +423,28 @@ class NIFU_Synthesis:
             pump_controller = pump_controllers[index]
             pump_controller['set_point'] = float(flow_rate)
 
-            c = self.pump_pid_classes[index]
-            if c:
-                c.set_off()
-
+            #figure out excel writing
             if pump_type == 'ELDEX':
-                Pump.eldex_pump_command(self, p_ser, command='SF', value=flow_rate)
+                    Pump.eldex_pump_command(self, p_ser, command='SF', value=flow_rate)
             elif pump_type == 'UI-22':
                 flow_rate = flow_rate.replace('.', '')
                 Pump.UI22_pump_command(self, p_ser, command='S3', value=flow_rate)
+
+            c = self.pump_pid_classes[index]
+            if c:
+                c.set_off()
 
             c = pid_control(b_ser, p_ser, pump_controller, pump_type, self.pumps_list[index], matrix_lengths[index], self.g)
             self.pump_pid_classes[index] = c
             c.set_excel_obj(self.excel_obj)
 
-            t_pid = threading.Thread(target=c.start_pid)
+            t_pid = threading.Thread(target=c.start)
             t_pid.daemon = True
             t_pid.start()
+
+    def change_pid_onoff(self,i):
+        c = self.pump_pid_classes[i]
+        c.pid_onoff(self.pid_vars[i].get())
 
     def change_valves(self):
         for i, valve_name in enumerate(self.valves_dict):
@@ -486,8 +496,6 @@ class NIFU_Synthesis:
         tk.Label(pump_frame, text='Pump Port Number', font=('TkDefaultFont', 9, 'underline')).grid(row=0, column=2)
         tk.Label(pump_frame, text='Balance Port Number', font=('TkDefaultFont', 9, 'underline')).grid(row=0, column=3)
 
-        # self.balance_save_vars = [tk.BooleanVar() for i in self.pumps_list]
-
         for i, name in enumerate(self.pumps_list):
             tk.Label(pump_frame, text=name).grid(row=i+1, column=0, padx=5)
 
@@ -513,22 +521,20 @@ class NIFU_Synthesis:
             balance_port_spinbox.grid(row=i+1, column=3, padx=5)
             self.balance_port_vars[i] = (self.balance_port_var)
 
-            # tk.Checkbutton(pump_frame, text='Save', variable=self.balance_save_vars[i]).grid(row=i+1, column=6)
-
         pump_frame.pack(pady=10)
 
     #graph data functions
     def change_start_button(self):
         self.start_button.config(background='pale green')
         self.stop_button.config(background='SystemButtonFace')
-        self.g.gui_plot_stop(False)
+        self.g.gui_plot_stop(False, self.plot, self.canvas)
         t = threading.Thread(target=self.g.plot, args=(self.plot, self.canvas))
         t.daemon = True
         t.start()
 
     def change_stop_button(self):
         self.start_button.config(background='SystemButtonFace')
-        self.g.gui_plot_stop(True)
+        self.g.gui_plot_stop(True, self.plot, self.canvas)
 
     def start_excel(self):
         self.start_excel_button.config(background='pale green')

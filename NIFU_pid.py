@@ -15,6 +15,7 @@ class pid_control:
         self.max_data_points = matrix_len
         self.graph_obj = graph_obj
 
+        self.pid_var = True
         self.excel_obj = None
         self.mass = None
         self.flow_rate = None
@@ -31,6 +32,9 @@ class pid_control:
 
     def set_excel_obj(self, excel_obj):
         self.excel_obj = excel_obj
+
+    def pid_onoff(self, boolean):
+        self.pid_var = boolean
 
     class pid:
         def __init__(self, set_point, kp, ki, kd, integral_error_limit):
@@ -135,14 +139,14 @@ class pid_control:
         @property
         def flow_rate(self):
             """
-            ouputs flow rate which is the process variable in PID
+            outputs flow rate which is the process variable in PID
             """
             try:
                 return self._mass_flow_rate
             except:
                 return 0.0
 
-    def start_pid(self):
+    def start(self):
         balance_ser = self.balance_ser
         pump_ser = self.pump_ser
         b = self.Balance(self.max_data_points)
@@ -161,7 +165,7 @@ class pid_control:
                     b.mass = mass_in_float
                     flow_rate = -(b.flow_rate)
 
-                    if flow_rate != last_flow_rate:
+                    if flow_rate != last_flow_rate and self.pid_var: #puts into pid control
                         output = float(self.pump_controller(flow_rate))
                         print('current flow rate:', flow_rate)
                         print('updated flow rate:', output)
@@ -181,12 +185,12 @@ class pid_control:
 
                 self.mass = mass_in_float
                 self.flow_rate = flow_rate
-                self.pid_output = output
+                self.pid_output = output if self.pid_var else 'N/A'
                 if self.excel_obj:
                     self.excel_obj.change_data(self.pump_name, self.get_last())
 
-                self.graph_obj.update_dict("balance", self.pump_name, self.mass)
-                self.graph_obj.update_dict("flow rate", self.pump_name, self.flow_rate)
+                self.graph_obj.update_dict("Balance", self.pump_name, self.mass)
+                self.graph_obj.update_dict("Flow Rate", self.pump_name, self.flow_rate)
 
                 time.sleep(.1)
 
@@ -252,77 +256,76 @@ class excel_file:
         self.workbook.save(self.filename)
         self.workbook.close()
 
+
 class graph:
-    def __init__(self, temperature_dict = None, pressure_dict = None, balance_dict = None, flow_rate_dict = None):
-        #are none when the plot checkmark is not checked
+    def __init__(self, temperature_dict, pressure_dict, balance_dict, flow_rate_dict):
         self.temperature_dict = temperature_dict
         self.pressure_dict = pressure_dict
         self.balance_dict = balance_dict
         self.flow_rate_dict = flow_rate_dict
+        self.data_dicts = [('Temperature', self.temperature_dict),('Pressure', self.pressure_dict),
+                        ('Balance', self.balance_dict),('Flow Rate', self.flow_rate_dict)]
+        self.line_styles = {'Temperature': '-', 'Pressure': '--', 'Balance': '-.', 'Flow Rate': ':'}
 
         self.gui_plot_stopped = False
 
-    def big_checkmark(self, dict_type, dict_obj):
-        if dict_type == 'temperature':
-            self.temperature_dict = None if self.temperature_dict else dict_obj
-        elif dict_type == 'pressure':
-            self.pressure_dict = None if self.pressure_dict else dict_obj
-        elif dict_type == 'balance':
-            self.balance_dict = None if self.balance_dict else dict_obj
-        elif dict_type == 'flow rate':
-            self.flow_rate_dict = None if self.flow_rate_dict else dict_obj
+    def big_checkmark(self, dict_type):
+        #remove all little checkmarks within
+        d = self.get_dict_type(dict_type)
+
+        if d:
+            for name in d:
+                if d[name][0]:
+                    d[name][0] = False
+                else:
+                    d[name][0] = True
 
     def plot(self, plot, canvas):
         while not self.gui_plot_stopped:
             plot.clear()
-            if self.temperature_dict:
-                for var, var_list in self.temperature_dict.items():
-                    if var_list:
-                        plot.plot(var_list, label='Temperature: '+ var)
-            if self.pressure_dict:
-                for var, var_list in self.pressure_dict.items():
-                    if var_list:
-                        plot.plot(var_list, label='Pressure: '+ var)
-            if self.balance_dict:
-                for var, var_list in self.balance_dict.items():
-                    if var_list:
-                        plot.plot(var_list, label='Balance: '+ var)
-            if self.flow_rate_dict:
-                for var, var_list in self.flow_rate_dict.items():
-                    if var_list:
-                        plot.plot(var_list, label='Flow Rate: '+ var)
+            for label, data_dict in self.data_dicts:
+                for name, var_value in data_dict.items():
+                    if var_value[0] and var_value[1]:
+                        times = [t for t, v in var_value[2]]
+                        values = [v for t, v in var_value[2]]
+
+                        plot.plot(times, values, label=f'{label}: {name}', linestyle=self.line_styles[label])
+
             plot.legend()
             canvas.draw()
 
-            time.sleep(1)
+            time.sleep(.5)
 
     def update_dict(self, dict_type, name ,value):
         d = self.get_dict_type(dict_type)
-
-        if d:
-            if d[name] != False:
-                d[name].append(value)
+        if d[name][0] and d[name][1]:
+            d[name][2].append((time.perf_counter(),value))
 
     def checkmark(self, dict_type, name): #when checkmarking a plot variable (the specific data)
         d = self.get_dict_type(dict_type)
 
-        if d:
-            if d[name] == False:
-                d[name] = []
+        if d[name][0]:
+            if d[name][1]:
+                d[name][1] = False
             else:
-                d[name] = False
+                d[name][1] = True
 
     def get_dict_type(self, dict_type):
-        if dict_type == 'temperature':
-            d = self.temperature_dict
-        elif dict_type == 'pressure':
-            d = self.pressure_dict
-        elif dict_type == 'balance':
-            d = self.balance_dict
-        elif dict_type == 'flow rate':
-            d = self.flow_rate_dict
+        if dict_type == 'Temperature':
+            return self.temperature_dict
+        elif dict_type == 'Pressure':
+            return self.pressure_dict
+        elif dict_type == 'Balance':
+            return self.balance_dict
+        elif dict_type == 'Flow rate':
+            return self.flow_rate_dict
 
-        return d
-
-    def gui_plot_stop(self, boolean):
+    def gui_plot_stop(self, boolean, plot, canvas):
         self.gui_plot_stopped = boolean
+        if boolean:
+            plot.clear()
+            canvas.draw()
+
+            for label, data_dict in self.data_dicts:
+                for key in data_dict:
+                    data_dict[key][2] = []
