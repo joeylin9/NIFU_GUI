@@ -284,11 +284,18 @@ class graph:
             for name in d:
                 d[name][0] = not d[name][0]
 
-    def plot(self, plot, canvas):
+    def plot(self, plots, canvas):
         while not self.gui_plot_stopped:
-            plotted = False
-            plot.clear()
+            self.update_dict('Temperature', 'HNO₃', 1)
+            self.update_dict('Pressure', 'HNO₃', 2)
+            self.update_dict('Balance', 'HNO₃', 3)
+            self.update_dict('Flow_Rate', 'HNO₃', 4)
+            for plot in plots:
+                plot.clear()
             for label, data_dict in self.data_dicts:
+                plotted = False
+                plot_idx = {'Temperature': 0, 'Pressure': 1, 'Balance': 2, 'Flow Rate': 3}[label]
+                plot = plots[plot_idx]
                 for name, var_value in data_dict.items():
                     if var_value[0] and var_value[1]:
                         times = [t for t, v in var_value[2]]
@@ -297,15 +304,12 @@ class graph:
                         if name not in self.color_map:
                             self.color_map[name] = plt.get_cmap("tab10")(len(self.color_map) % 10)
 
-                        plot.plot(times, values, label=f'{label}: {name}',
-                                linestyle=self.line_styles[label],
-                                color=self.color_map[name])
+                        plot.plot(times, values, label=f'{label}: {name}', linestyle=self.line_styles[label], color=self.color_map[name])
                         plotted = True
 
-            if plotted:
-                plot.legend()
+                if plotted:
+                    plot.legend()  # Add legend for each specific plot
             canvas.draw()
-
             time.sleep(.2)
 
     def update_dict(self, dict_type, name, value):
