@@ -248,8 +248,12 @@ class NIFU_Synthesis:
 
         # graph_display
         self.graph_display_frame = tk.Frame(graph_frame, width=800, height=500, bg='white')
-        self.figure = Figure(figsize = (8,5), dpi = 100)
-        self.plot = self.figure.add_subplot(111)
+        self.figure = Figure(figsize = (10,7), dpi = 100)
+        plot1 = self.figure.add_subplot(221)
+        plot2 = self.figure.add_subplot(222)
+        plot3 = self.figure.add_subplot(223)
+        plot4 = self.figure.add_subplot(224)
+        self.plots = [plot1, plot2, plot3, plot4]
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.graph_display_frame)
         self.canvas.draw()
         self.canvas.get_tk_widget().pack()
@@ -439,8 +443,8 @@ class NIFU_Synthesis:
                 Pump.UI22_pump_command(self, p_ser, command='S3', value=flow_rate)
 
             c = self.pump_pid_classes[index]
-            c.set_stop(False)
             c.set_controller_and_matrix(pump_controller, matrix_lengths[index])
+            c.set_stop(False)
 
             if not self.pump_pid_threads_started[index]:
                 t_pid = threading.Thread(target=c.start)
@@ -451,7 +455,10 @@ class NIFU_Synthesis:
 
     def change_pid_onoff(self,i):
         c = self.pump_pid_classes[i]
-        c.pid_onoff(self.pid_vars[i].get())
+        if c:
+            c.pid_onoff(self.pid_vars[i].get())
+            if not self.pid_vars[i].get():
+                print('PID control off')
 
     def change_valves(self):
         for i, valve_name in enumerate(self.valves_dict):
@@ -535,7 +542,7 @@ class NIFU_Synthesis:
         self.start_button.config(background='pale green')
         self.stop_button.config(background='SystemButtonFace')
         self.g.gui_plot_stop(False)
-        t = threading.Thread(target=self.g.plot, args=(self.plot, self.canvas))
+        t = threading.Thread(target=self.g.plot, args=(self.plots, self.canvas))
         t.daemon = True
         t.start()
 
