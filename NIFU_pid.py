@@ -157,54 +157,60 @@ class pid_control:
         b = self.Balance(self.max_data_points)
 
         last_flow_rate = 0.0
-        while not self.stop:
-            # try:
-                balance_data = balance_ser.read(1000)
-                value = balance_data.split()[1].decode('ascii').strip()
+        while True:
+            while not self.stop:
+                # try:
+                    balance_data = balance_ser.read(1000)
+                    value = balance_data.split()[1].decode('ascii').strip()
 
-                if value.startswith('+') or value.startswith('-'):
-                    print('skip')
-                    continue
-                else:
-                    mass_in_float = float(value.split('g')[0])
-                    b.mass = mass_in_float
-                    flow_rate = -(b.flow_rate)
+                    if value.startswith('+') or value.startswith('-'):
+                        print('skip')
+                        continue
+                    else:
+                        mass_in_float = float(value.split('g')[0])
+                        b.mass = mass_in_float
+                        flow_rate = -(b.flow_rate)
 
-                    output = None
-                    if flow_rate != last_flow_rate and self.pid_var: #puts into pid control
-                        output = float(self.pump_controller(flow_rate))
-                        print('current flow rate:', flow_rate)
-                        print('updated flow rate:', output)
-                        output_str = f'{output:06.3f}' #assumes output is less than 100 and nonnegative
+                        output = None
+                        if flow_rate != last_flow_rate and self.pid_var: #puts into pid control
+                            output = float(self.pump_controller(flow_rate))
+                            print('current flow rate:', flow_rate)
+                            print('updated flow rate:', output)
+                            output_str = f'{output:06.3f}' #assumes output is less than 100 and nonnegative
 
-                        if self.pump_type == 'ELDEX':
-                            #put flow rate into eldex pump command
-                            command_str = f'SF{output_str}\r\n'
-                            pump_ser.write(command_str.encode('ascii'))
+                            if self.pump_type == 'ELDEX':
+                                #put flow rate into eldex pump command
+                                command_str = f'SF{output_str}\r\n'
+                                pump_ser.write(command_str.encode('ascii'))
 
-                        elif self.pump_type == 'UI-22':
-                            output_str = output_str.replace('.', '')
-                            command_str = f';01,S3,{output_str}\r\n'
-                            pump_ser.write(command_str.encode('ascii'))
+                            elif self.pump_type == 'UI-22':
+                                output_str = output_str.replace('.', '')
+                                command_str = f';01,S3,{output_str}\r\n'
+                                pump_ser.write(command_str.encode('ascii'))
 
-                    last_flow_rate = flow_rate
+                        last_flow_rate = flow_rate
 
-                self.mass = mass_in_float
-                self.flow_rate = flow_rate
-                self.pid_output = output
-                if self.excel_obj:
-                    self.excel_obj.change_data(self.pump_name, self.get_last())
+                    self.mass = mass_in_float
+                    self.flow_rate = flow_rate
+                    self.pid_output = output
+                    if self.excel_obj:
+                        self.excel_obj.change_data(self.pump_name, self.get_last())
 
-                self.graph_obj.update_dict("Balance", self.pump_name, self.mass)
-                self.graph_obj.update_dict("Flow_Rate", self.pump_name, self.flow_rate)
+                    self.graph_obj.update_dict("Balance", self.pump_name, self.mass)
+                    self.graph_obj.update_dict("Flow_Rate", self.pump_name, self.flow_rate)
 
-                time.sleep(.1)
+                    time.sleep(.1)
 
-            # except Exception as e:
-            #     print('Error:', e)
+                # except Exception as e:
+                #     print('Error:', e)
 
-        if self.excel_obj:
-            self.excel_obj.change_data(self.pump_name, self.get_last()) #when exciting out loop as well
+            self.graph_obj.update_dict("Balance", self.pump_name, None)
+            self.graph_obj.update_dict("Flow_Rate", self.pump_name, None)
+
+            if self.excel_obj:
+                self.excel_obj.change_data(self.pump_name, self.get_last()) #when exciting out loop as well
+
+            time.sleep(.5)
 
     def get_last(self):
         if self.mass and self.flow_rate:
@@ -271,7 +277,6 @@ class graph:
         self.flow_rate_dict = flow_rate_dict
         self.data_dicts = [('Temperature', self.temperature_dict),('Pressure', self.pressure_dict),
                         ('Balance', self.balance_dict),('Flow Rate', self.flow_rate_dict)]
-        self.line_styles = {'Temperature': '-', 'Pressure': '--', 'Balance': '-.', 'Flow Rate': ':'}
         self.color_map = {}
 
         self.gui_plot_stopped = False
@@ -286,16 +291,12 @@ class graph:
 
     def plot(self, plots, canvas):
         while not self.gui_plot_stopped:
-            self.update_dict('Temperature', 'HNO₃', 1)
-            self.update_dict('Pressure', 'HNO₃', 2)
-            self.update_dict('Balance', 'HNO₃', 3)
-            self.update_dict('Flow_Rate', 'HNO₃', 4)
-            for plot in plots:
-                plot.clear()
+            for p in plots:
+                p.clear()
             for label, data_dict in self.data_dicts:
                 plotted = False
-                plot_idx = {'Temperature': 0, 'Pressure': 1, 'Balance': 2, 'Flow Rate': 3}[label]
-                plot = plots[plot_idx]
+                p_idx = {'Temperature': 0, 'Pressure': 1, 'Balance': 2, 'Flow Rate': 3}[label]
+                p = plots[p_idx]
                 for name, var_value in data_dict.items():
                     if var_value[0] and var_value[1]:
                         times = [t for t, v in var_value[2]]
@@ -304,13 +305,13 @@ class graph:
                         if name not in self.color_map:
                             self.color_map[name] = plt.get_cmap("tab10")(len(self.color_map) % 10)
 
-                        plot.plot(times, values, label=f'{label}: {name}', linestyle=self.line_styles[label], color=self.color_map[name])
+                        p.plot(times, values, label=f'{label}: {name}', color=self.color_map[name])
                         plotted = True
 
                 if plotted:
-                    plot.legend()  # Add legend for each specific plot
+                    p.legend()  # Add legend for each specific plot
             canvas.draw()
-            time.sleep(.2)
+            time.sleep(.5)
 
     def update_dict(self, dict_type, name, value):
         d = self.get_dict_type(dict_type)
