@@ -4,6 +4,7 @@ from NIFU_Serial import Pump, Balance
 from NIFU_pid import pid_control, excel_file, graph
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
+import collections
 
 #replace with correct values
 pump1_controller = {'set_point': None, 'kp': 0.1, 'ki': 0.0001, 'kd': 0.01, 'integral_error_limit': 100}
@@ -219,13 +220,40 @@ class NIFU_Synthesis:
         data_frame = tk.Frame(gui_frame)
         tk.Label(data_frame, text="Graph Data", font=('Arial', 16, 'underline')).grid(row=0, column=0, pady=10, sticky='nw')
 
-        self.plot_temperatures = {'HNO₃':[False, False, []], 'Furfural':[False, False, []], 'KOH':[False, False, []], '2MeTHF':[False, False, []],
-                            'Aq-Org Separator':[False, False, []], 'H₂SO₄':[False, False, []], 'Aminohydantoin':[False, False, []]}
-        self.plot_pressures = {'HNO₃':[False, False, []], 'Furfural':[False, False, []], 'KOH':[False, False, []], 'H₂SO₄':[False, False, []], 'Aminohydantoin':[False, False, []]}
-        self.plot_balances = {'HNO₃':[False, False, []], 'Acetic anhydride':[False, False, []], 'Furfural':[False, False, []], 'KOH':[False, False, []], '2MeTHF':[False, False, []],
-                        'Aqueous':[False, False, []], 'H₂SO₄':[False, False, []], 'Aminohydantoin':[False, False, []], 'Crude NIFU Out':[False, False, []]}
-        self.plot_flow_rates = {'HNO₃':[False, False, []], 'Acetic anhydride':[False, False, []], 'Reactor 1':[False, False, []], 'Furfural':[False, False, []],
-                        'KOH':[False, False, []], '2MeTHF':[False, False, []], 'H₂SO₄':[False, False, []], 'Aminohydantoin':[False, False, []], 'Crude NIFU Out':[False, False, []]}
+        self.plot_temperatures = {'HNO₃':[False, False, collections.deque(maxlen=100)],
+                                  'Furfural':[False, False, collections.deque(maxlen=100)],
+                                  'KOH':[False, False, collections.deque(maxlen=100)],
+                                  '2MeTHF':[False, False, collections.deque(maxlen=100)],
+                                  'Aq-Org Separator':[False, False, collections.deque(maxlen=100)],
+                                  'H₂SO₄':[False, False, collections.deque(maxlen=100)],
+                                  'Aminohydantoin':[False, False, collections.deque(maxlen=100)]
+                                  }
+        self.plot_pressures = {'HNO₃':[False, False, collections.deque(maxlen=100)],
+                               'Furfural':[False, False, collections.deque(maxlen=100)],
+                               'KOH':[False, False, collections.deque(maxlen=100)],
+                               'H₂SO₄':[False, False, collections.deque(maxlen=100)],
+                               'Aminohydantoin':[False, False, collections.deque(maxlen=100)]
+                               }
+        self.plot_balances = {'HNO₃':[False, False, collections.deque(maxlen=100)],
+                              'Acetic anhydride':[False, False, collections.deque(maxlen=100)],
+                              'Furfural':[False, False, collections.deque(maxlen=100)],
+                              'KOH':[False, False, collections.deque(maxlen=100)],
+                              '2MeTHF':[False, False, collections.deque(maxlen=100)],
+                              'Aqueous':[False, False, collections.deque(maxlen=100)],
+                              'H₂SO₄':[False, False, collections.deque(maxlen=100)],
+                              'Aminohydantoin':[False, False, collections.deque(maxlen=100)],
+                              'Crude NIFU Out':[False, False, collections.deque(maxlen=100)]
+                              }
+        self.plot_flow_rates = {'HNO₃':[False, False, collections.deque(maxlen=100)],
+                                'Acetic anhydride':[False, False, collections.deque(maxlen=100)],
+                                'Reactor 1':[False, False, collections.deque(maxlen=100)],
+                                'Furfural':[False, False, collections.deque(maxlen=100)],
+                                'KOH':[False, False, collections.deque(maxlen=100)],
+                                '2MeTHF':[False, False, collections.deque(maxlen=100)],
+                                'H₂SO₄':[False, False, collections.deque(maxlen=100)],
+                                'Aminohydantoin':[False, False, collections.deque(maxlen=100)],
+                                'Crude NIFU Out':[False, False, collections.deque(maxlen=100)]
+                                }
         self.data_type_dict_objects = [self.plot_temperatures, self.plot_pressures, self.plot_balances, self.plot_flow_rates]
 
         self.g = graph(self.plot_temperatures, self.plot_pressures, self.plot_balances, self.plot_flow_rates)
