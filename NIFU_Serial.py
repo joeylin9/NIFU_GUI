@@ -1,6 +1,5 @@
 import serial
-import pandas as pd
-import time
+from pymodbus.client import ModbusTcpClient
 
 class Pump:
     def pump_connect(self, port_number):
@@ -76,26 +75,28 @@ class Pump:
         print(f'{ser.portstr}: {response}')
 
 class Balance:
-    def balance_read_data(self, port_number):
+    def balance_connect(self, port_number):
         p = f'COM{port_number}'
         ser = serial.Serial(port=p, baudrate=9600, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE,
                             bytesize=serial.EIGHTBITS, timeout=0.2)
         print("connected to: " + ser.portstr)
+        return ser
 
-        times = []
-        balances = []
-        start = time.time()
+    def balance_disconnect(self, ser):
+        ser.close()
+        print("disconnected from: " + ser.portstr)
 
-        for i in range(1000):
-            end = time.time()
-            t = end-start
+class PLC:
+    def __init__(self) -> None:
+        self.client = ModbusTcpClient(host = 'IP', port = 'port') #change to real values
+        self.client.connect()
 
-            s = ser.read(1000)
-            s_decoded = s.decode('ascii').strip()  # Decode the bytes to string and strip any whitespace
+    def read(self, address, number):
+        regs = self.client.read_holding_registers(address, number)
+        if regs:
+            print(regs)
+            return regs
+        else:
+            print('Read Error')
 
-            times.append(t)
-            balances.append(s_decoded)
-
-        data = {'Time': times, 'Balance': balances}
-        df = pd.DataFrame(data)
-        print(df)
+        #to get value, can do value = regs[0]
