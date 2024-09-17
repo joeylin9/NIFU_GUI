@@ -655,6 +655,7 @@ class NIFU_Synthesis:
         t.start()
         sleep(5)
         plc.reading_onoff(False)
+        plc.close()
         print('done reading temperatures')
         
 
