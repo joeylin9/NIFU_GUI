@@ -1,5 +1,6 @@
 import serial
 from pymodbus.client import ModbusTcpClient
+from time import sleep
 
 class Pump:
     def pump_connect(self, port_number):
@@ -88,15 +89,50 @@ class Balance:
 
 class PLC:
     def __init__(self) -> None:
-        self.client = ModbusTcpClient(host = 'IP', port = 'port') #change to real values
+        self.reading = False
+        self.data = None
+    
+    def connect(self, port_number):
+        self.client = ModbusTcpClient(host = '169.254.92.250', port = port_number)
         self.client.connect()
+    
+    def reading_onoff(self, boolean):
+        self.reading = boolean
+    
+    # def set_data(self, r1, r2 = None):
+    #     if r2:
+    #         self.data = [r1,r2]
+    #     else:
+    #         self.data = [r1]
 
-    def read(self, address, number):
-        regs = self.client.read_holding_registers(address, number)
-        if regs:
-            print(regs)
-            return regs
-        else:
-            print('Read Error')
+    # def get_data(self):
+    #     return self.data
 
-        #to get value, can do value = regs[0]
+    def read(self, reg1, reg2 = None):
+        """
+        Inputs in two registers. The second register is optional.
+        
+        If two registers are entered, the data is a 32 bit data, else
+        one register means 16 bit
+
+        Returns a list of the modbus reponses (likely floats). If both 
+        registers are inputted, 
+        """
+        while self.reading:  # make sure to start a new thread when rechecking / restarting excel sheet
+            print('reading')
+            r1, r2 = None, None
+            r1 = self.client.read_holding_registers(reg1, 1).registers[0]
+            if reg2:
+                r2 = self.client.read_holding_registers(reg2, 1).registers[0]
+            
+            print(r1,r2)
+
+            # self.set_data(r1, r2)
+            
+            #or just start writing it to the graph/excel if exists right now
+            #graph_obj.change_dict[name, stuff, stuff]
+            #excel_obj.write[data, data]
+            sleep(.5)
+        
+    def close(self):
+        self.client.close()
