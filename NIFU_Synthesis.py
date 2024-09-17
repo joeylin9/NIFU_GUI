@@ -1,10 +1,10 @@
 import tkinter as tk
 import threading
-from NIFU_Serial import Pump, Balance
+from NIFU_Serial import Pump, Balance, PLC
 from NIFU_pid import pid_control, excel_file, graph
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-import collections
+from time import sleep
 
 #replace with correct values
 pump1_controller = {'set_point': None, 'kp': 0.1, 'ki': 0.0001, 'kd': 0.01, 'integral_error_limit': 100}
@@ -220,39 +220,39 @@ class NIFU_Synthesis:
         data_frame = tk.Frame(gui_frame)
         tk.Label(data_frame, text="Graph Data", font=('Arial', 16, 'underline')).grid(row=0, column=0, pady=10, sticky='nw')
 
-        self.plot_temperatures = {'HNO₃':[False, False, collections.deque(maxlen=100)],
-                                  'Furfural':[False, False, collections.deque(maxlen=100)],
-                                  'KOH':[False, False, collections.deque(maxlen=100)],
-                                  '2MeTHF':[False, False, collections.deque(maxlen=100)],
-                                  'Aq-Org Separator':[False, False, collections.deque(maxlen=100)],
-                                  'H₂SO₄':[False, False, collections.deque(maxlen=100)],
-                                  'Aminohydantoin':[False, False, collections.deque(maxlen=100)]
+        self.plot_temperatures = {'HNO₃':[False, False, []],
+                                  'Furfural':[False, False, []],
+                                  'KOH':[False, False, []],
+                                  '2MeTHF':[False, False, []],
+                                  'Aq-Org Separator':[False, False, []],
+                                  'H₂SO₄':[False, False, []],
+                                  'Aminohydantoin':[False, False, []]
                                   }
-        self.plot_pressures = {'HNO₃':[False, False, collections.deque(maxlen=100)],
-                               'Furfural':[False, False, collections.deque(maxlen=100)],
-                               'KOH':[False, False, collections.deque(maxlen=100)],
-                               'H₂SO₄':[False, False, collections.deque(maxlen=100)],
-                               'Aminohydantoin':[False, False, collections.deque(maxlen=100)]
+        self.plot_pressures = {'HNO₃':[False, False, []],
+                               'Furfural':[False, False, []],
+                               'KOH':[False, False, []],
+                               'H₂SO₄':[False, False, []],
+                               'Aminohydantoin':[False, False, []]
                                }
-        self.plot_balances = {'HNO₃':[False, False, collections.deque(maxlen=100)],
-                              'Acetic anhydride':[False, False, collections.deque(maxlen=100)],
-                              'Furfural':[False, False, collections.deque(maxlen=100)],
-                              'KOH':[False, False, collections.deque(maxlen=100)],
-                              '2MeTHF':[False, False, collections.deque(maxlen=100)],
-                              'Aqueous':[False, False, collections.deque(maxlen=100)],
-                              'H₂SO₄':[False, False, collections.deque(maxlen=100)],
-                              'Aminohydantoin':[False, False, collections.deque(maxlen=100)],
-                              'Crude NIFU Out':[False, False, collections.deque(maxlen=100)]
+        self.plot_balances = {'HNO₃':[False, False, []],
+                              'Acetic anhydride':[False, False, []],
+                              'Furfural':[False, False, []],
+                              'KOH':[False, False, []],
+                              '2MeTHF':[False, False, []],
+                              'Aqueous':[False, False, []],
+                              'H₂SO₄':[False, False, []],
+                              'Aminohydantoin':[False, False, []],
+                              'Crude NIFU Out':[False, False, []]
                               }
-        self.plot_flow_rates = {'HNO₃':[False, False, collections.deque(maxlen=100)],
-                                'Acetic anhydride':[False, False, collections.deque(maxlen=100)],
-                                'Reactor 1':[False, False, collections.deque(maxlen=100)],
-                                'Furfural':[False, False, collections.deque(maxlen=100)],
-                                'KOH':[False, False, collections.deque(maxlen=100)],
-                                '2MeTHF':[False, False, collections.deque(maxlen=100)],
-                                'H₂SO₄':[False, False, collections.deque(maxlen=100)],
-                                'Aminohydantoin':[False, False, collections.deque(maxlen=100)],
-                                'Crude NIFU Out':[False, False, collections.deque(maxlen=100)]
+        self.plot_flow_rates = {'HNO₃':[False, False, []],
+                                'Acetic anhydride':[False, False, []],
+                                'Reactor 1':[False, False, []],
+                                'Furfural':[False, False, []],
+                                'KOH':[False, False, []],
+                                '2MeTHF':[False, False, []],
+                                'H₂SO₄':[False, False, []],
+                                'Aminohydantoin':[False, False, []],
+                                'Crude NIFU Out':[False, False, []]
                                 }
         self.data_type_dict_objects = [self.plot_temperatures, self.plot_pressures, self.plot_balances, self.plot_flow_rates]
 
@@ -281,7 +281,26 @@ class NIFU_Synthesis:
         plot2 = self.figure.add_subplot(222)
         plot3 = self.figure.add_subplot(223)
         plot4 = self.figure.add_subplot(224)
+
+        plot1.set_title('Temperature Over Time')
+        plot1.set_xlabel('Time (s)')
+        plot1.set_ylabel('Temperature (°C)')
+
+        plot2.set_title('Pressure Over Time')
+        plot2.set_xlabel('Time (s)')
+        plot2.set_ylabel('Pressure (psi)')
+
+        plot3.set_title('Balance Over Time')
+        plot3.set_xlabel('Time (s)')
+        plot3.set_ylabel('Balance (g)')
+
+        plot4.set_title('Flow Rate Over Time')
+        plot4.set_xlabel('Time (s)')
+        plot4.set_ylabel('Flow Rate (mL/min)')
+        
+
         self.plots = [plot1, plot2, plot3, plot4]
+        self.figure.tight_layout()
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.graph_display_frame)
         self.canvas.draw()
         self.canvas.get_tk_widget().pack()
@@ -627,6 +646,16 @@ class NIFU_Synthesis:
             quit()
 
     def test(self):
-        self.g.test()
+        plc = PLC()
+        plc.connect(port_number= 502) #host = '169.254.92.250'
+        plc.reading_onoff(True)
+        # t = threading.Thread(target=lambda: plc.read, args=(reg1, reg2)) #replace with real registers
+        t = threading.Thread(target=lambda: plc.read(reg1, reg2))#replace with real registers
+        t.daemon = True
+        t.start()
+        sleep(5)
+        plc.reading_onoff(False)
+        print('done reading temperatures')
+        
 
 NIFU_Synthesis()
