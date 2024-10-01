@@ -117,7 +117,6 @@ class NIFU_Synthesis:
         self.pump_type_vars = [None for i in self.pumps_list]
         self.pump_port_vars = [None for i in self.pumps_list]
         self.balance_port_vars = [None for i in self.pumps_list]
-
         ### --- VALVES --- ###
         valves_frame = tk.Frame(equipment_frame)
         tk.Label(equipment_frame, text="3-Way Valves", font=('Arial', 16, 'underline')).pack(anchor='nw', padx=15, pady=(10,0))
@@ -146,35 +145,35 @@ class NIFU_Synthesis:
         ### --- TEMPERATURES --- ###
         temps_frame = tk.Frame(equipment_frame)
         tk.Label(equipment_frame, text="Reactor Temperatures (°C)", font=('Arial', 16, 'underline')).pack(anchor='nw', padx=15, pady=(10,0))
-        self.temps_dict = {
-            'Reactor 1: HNO₃': ['off', '0'],
-            'Reactor 2: Furfural': ['off', '0'],
-            'Reactor 3: KOH': ['off', '0'],
-            'Reactor 4: 2MeTHF': ['off', '0'],
-            'Reactor 5: H₂SO₄': ['off', '0'],
-            'Reactor 6: Aminohydantoin': ['off', '0']
-        }
-        self.temps_onoff_vars = []
+        self.temps_list = ['HNO₃','Furfural','KOH','2MeTHF','H₂SO₄','Aminohydantoin',]
+        self.temp_connect_var = tk.IntVar()
+        self.temp_connect_var.set(0)  # Initial state: off
         self.temp_entry_vars = []
+        self.temp_reg1_vars = [None for i in self.temps_list]
+        self.temp_reg2_vars = [None for i in self.temps_list]
 
-        for i, temp_name in enumerate(self.temps_dict):
+        self.temp_connect_button = tk.Button(temps_frame, text="Connect", font = ('Arial', 12, 'bold'), width=12, command = self.temp_connect)
+        self.temp_connect_button.grid(row=0, column=0)
+
+        tk.Label(temps_frame, text="Temperature", font=('Arial', 12, 'bold')).grid(row=0, column=3, sticky="nsew")
+        tk.Label(temps_frame, text="Set Temperature", font=('Arial', 12, 'bold')).grid(row=0, column=4, sticky="nsew")
+        tk.Label(temps_frame, text="Current", font=('Arial', 12, 'bold')).grid(row=0, column=5, sticky="nsew")
+        self.current_temp_labels = []
+
+        for i, temp_name in enumerate(self.temps_list):
             # Temp names
-            tk.Label(temps_frame, text=temp_name).grid(row=i, column=0, sticky='w')
-
-            # On/Off buttons
-            temps_onoff_var = tk.IntVar()
-            temps_onoff_var.set(0)  # Initial state: off
-            self.temps_onoff_vars.append(temps_onoff_var)
-            temp_on_button = tk.Radiobutton(temps_frame, text='on', value=1, variable=temps_onoff_var)
-            temp_off_button = tk.Radiobutton(temps_frame, text='off', value=0, variable=temps_onoff_var)
-            temp_on_button.grid(row=i, column=1)
-            temp_off_button.grid(row=i, column=2)
+            tk.Label(temps_frame, text=f'Reactor {i+1}: {temp_name}').grid(row=i+1, column=0, sticky='w')
 
             # Entry for temperature
             self.temp_entry_var = tk.StringVar()
-            temp_entry= tk.Entry(temps_frame, textvariable=self.temp_entry_var)
-            temp_entry.grid(row=i, column=3, sticky='e', padx=(15,0))
+            temp_entry = tk.Entry(temps_frame, textvariable=self.temp_entry_var)
+            temp_entry.grid(row=i+1, column=3, padx=15)
             self.temp_entry_vars.append(self.temp_entry_var)
+            temp_entry= tk.Button(temps_frame, text='Set', width=5, command=self.set_temp)
+            temp_entry.grid(row=i+1, column=4, padx=15)
+            current_temp_label = tk.Label(temps_frame, text=None, bg="white", width=10)
+            current_temp_label.grid(row=i+1, column=5,padx=15)
+            self.current_temp_labels.append(current_temp_label)
 
         temps_frame.pack(anchor='nw', padx=15)
 
@@ -257,6 +256,7 @@ class NIFU_Synthesis:
         self.data_type_dict_objects = [self.plot_temperatures, self.plot_pressures, self.plot_balances, self.plot_flow_rates]
 
         self.g = graph(self.plot_temperatures, self.plot_pressures, self.plot_balances, self.plot_flow_rates)
+        self.plc = PLC(self.g)
 
         #Checkboxes for different data
         data_types_frame = tk.Frame(data_frame)
@@ -513,18 +513,33 @@ class NIFU_Synthesis:
             valve_status = 'collection' if self.valves_onoff_vars[i].get() == 1 else 'waste'
             self.valves_dict[valve_name] = valve_status
 
-    def change_temps(self):
-        for i, temp_name in enumerate(self.temps_dict):
-            # Update status ('on' or 'off')
-            temp_status = 'on' if self.temps_onoff_vars[i].get() == 1 else 'off'
-            self.temps_dict[temp_name][0] = temp_status
-
-            # Update temperature
-            if temp_status == 'on':
-                temperature = self.temp_entry_vars[i].get()
-                self.temps_dict[temp_name][1] = temperature
-            else:
-                self.temps_dict[temp_name][1] = '0'
+    def temp_connect(self):
+        if self.temp_connect_var.get() == 0: # if not connected, connect
+            self.temp_connect_button.config(bg="pale green", text="Connected")
+            self.temp_connect_var.set(1)
+            self.plc.connect()
+            self.plc.reading_onoff(True)
+            self.read_temps()
+        else:
+            print(self.temp_connect_var.get())
+            self.temp_connect_var.set(0)
+            self.temp_connect_button.config(bg="SystemButtonFace", text="Connect")
+            self.plc.reading_onoff(False)
+            self.plc.disconnect()
+    
+    def set_temp(self, index):
+        if self.temp_connect_var.get() == 1:
+            temp_data = float(self.temp_entry_vars[index].get())
+            reg1, reg2 = self.temp_reg1_vars[index], self.temp_reg1_vars[index]
+            self.plc.write_temp(temp_data, reg1, reg2)
+    
+    def read_temps(self):
+        for index, label in enumerate(self.current_temp_labels):
+            reg1 = self.temp_reg1_vars[index]
+            reg2 = self.temp_reg2_vars[index]
+            t = threading.Thread(target=self.plc.read_temp, args=(self.temps_list[index], label, reg1, reg2))
+            t.daemon = True
+            t.start()
 
     def change_liquids(self):
         self.liquids_dict['Organic'] = self.org_var.get()
@@ -536,7 +551,6 @@ class NIFU_Synthesis:
     def apply_button_click(self):
         # Update all dictionaries with the current values from the GUI, and open commands page
         self.change_valves()
-        self.change_temps()
         self.change_liquids()
         self.change_stirrer()
         self.open_assign()
@@ -570,19 +584,45 @@ class NIFU_Synthesis:
             self.pump_port_var = tk.IntVar()
             if self.pump_port_vars[i]:
                 self.pump_port_var.set(self.pump_port_vars[i].get())
-            pump_port_spinbox = tk.Spinbox(pump_frame, textvariable=self.pump_port_var, from_=0, to=20, wrap=True)
-            pump_port_spinbox.grid(row=i+1, column=2, padx=5)
+            pump_port_entry = tk.Entry(pump_frame, textvariable=self.pump_port_var)
+            pump_port_entry.grid(row=i+1, column=2, padx=5)
             self.pump_port_vars[i] = (self.pump_port_var)
 
             #balances
             self.balance_port_var = tk.IntVar()
             if self.balance_port_vars[i]:
                 self.balance_port_var.set(self.balance_port_vars[i].get())
-            balance_port_spinbox = tk.Spinbox(pump_frame, textvariable=self.balance_port_var, from_=0, to=20, wrap=True)
-            balance_port_spinbox.grid(row=i+1, column=3, padx=5)
+            balance_port_entry = tk.Entry(pump_frame, textvariable=self.balance_port_var)
+            balance_port_entry.grid(row=i+1, column=3, padx=5)
             self.balance_port_vars[i] = (self.balance_port_var)
-
+        
         pump_frame.pack(pady=10)
+
+        #temperature registers
+        temp_frame = tk.Frame(self.assign_page)
+        tk.Label(temp_frame, text='Temperature Name', font=('TkDefaultFont', 9, 'underline')).grid(row=0, column=0)
+        tk.Label(temp_frame, text='Register 1', font=('TkDefaultFont', 9, 'underline')).grid(row=0, column=1)
+        tk.Label(temp_frame, text='Register 2', font=('TkDefaultFont', 9, 'underline')).grid(row=0, column=2)
+
+        for i, temp_name in enumerate(self.temps_list):
+            tk.Label(temp_frame, text=temp_name).grid(row=i+1, column=0, padx=5)
+
+            temp_reg1_var = tk.IntVar()
+            temp_reg1_var.set(None)
+            temp_reg2_var = tk.IntVar()
+            temp_reg2_var.set(None)
+            if self.temp_reg1_vars[i]:
+                temp_reg1_var.set(self.temp_reg1_vars[i].get())
+            if self.temp_reg2_vars[i]:
+                temp_reg2_var.set(self.temp_reg2_vars[i].get())
+            temp_var_reg1_entry = tk.Entry(temp_frame, textvariable=temp_reg1_var)
+            temp_var_reg2_entry = tk.Entry(temp_frame, textvariable=temp_reg2_var)
+            temp_var_reg1_entry.grid(row=i+1, column=1, padx=5)
+            temp_var_reg2_entry.grid(row=i+1, column=2, padx=5)
+            self.temp_reg1_vars[i] = (temp_reg1_var)
+            self.temp_reg2_vars[i] = (temp_reg2_var)
+        
+        temp_frame.pack(pady=10)
 
     #graph data functions
     def change_start_button(self):
@@ -646,17 +686,6 @@ class NIFU_Synthesis:
             quit()
 
     def test(self):
-        plc = PLC()
-        plc.connect(port_number= 502) #host = '169.254.92.250'
-        plc.reading_onoff(True)
-        # t = threading.Thread(target=lambda: plc.read, args=(reg1, reg2)) #replace with real registers
-        t = threading.Thread(target=lambda: plc.read(reg1, reg2))#replace with real registers
-        t.daemon = True
-        t.start()
-        sleep(5)
-        plc.reading_onoff(False)
-        plc.close()
-        print('done reading temperatures')
-        
+        pass
 
-NIFU_Synthesis()
+gui = NIFU_Synthesis()
