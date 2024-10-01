@@ -1,6 +1,10 @@
 import serial
 from pymodbus.client import ModbusTcpClient
 from time import sleep
+import struct
+from pymodbus.constants import Endian
+from pymodbus.payload import BinaryPayloadBuilder
+
 
 class Pump:
     def pump_connect(self, port_number):
@@ -88,27 +92,22 @@ class Balance:
         print("disconnected from: " + ser.portstr)
 
 class PLC:
-    def __init__(self) -> None:
+    def __init__(self, graph_obj) -> None:
+        self.client = ModbusTcpClient(host = '169.254.92.250', port = 502)
         self.reading = False
         self.data = None
+        self.graph_obj = graph_obj
     
-    def connect(self, port_number):
-        self.client = ModbusTcpClient(host = '169.254.92.250', port = port_number)
+    def connect(self):
         self.client.connect()
+
+    def disconnect(self):
+        self.client.close()
     
     def reading_onoff(self, boolean):
         self.reading = boolean
-    
-    # def set_data(self, r1, r2 = None):
-    #     if r2:
-    #         self.data = [r1,r2]
-    #     else:
-    #         self.data = [r1]
 
-    # def get_data(self):
-    #     return self.data
-
-    def read(self, reg1, reg2 = None):
+    def read_temp(self, name, label, reg1, reg2 = None):
         """
         Inputs in two registers. The second register is optional.
         
@@ -119,20 +118,38 @@ class PLC:
         registers are inputted, 
         """
         while self.reading:  # make sure to start a new thread when rechecking / restarting excel sheet
-            print('reading')
             r1, r2 = None, None
             r1 = self.client.read_holding_registers(reg1, 1).registers[0]
             if reg2:
                 r2 = self.client.read_holding_registers(reg2, 1).registers[0]
             
-            print(r1,r2)
+            current_temp = struct.unpack('f', struct.pack('<HH', int(r1), int(r2)))[0]
+            label.config(text = str(current_temp))
 
-            # self.set_data(r1, r2)
+            # x = random.randint(0,100)
+            # label.config(text=str(x))
             
-            #or just start writing it to the graph/excel if exists right now
-            #graph_obj.change_dict[name, stuff, stuff]
-            #excel_obj.write[data, data]
+            #write into dict for graph
+            self.graph_obj.update_dict("Temperature", name, current_temp)
+            # excel_obj.write[data, data]
             sleep(.5)
         
-    def close(self):
-        self.client.close()
+    def write_temp(self, data, reg1, reg2 = None):
+        data = [data]
+        address = 0
+        
+        for i in range(10):
+           print('-'*5,'Cycle ',i,'-'*30)
+           sleep(1.0) # why sleep
+        
+           # increment data by one
+           for i,d in enumerate(data):
+              data[i] = d + 1
+        
+           # write holding registers
+           print('Write:',data)
+           builder = BinaryPayloadBuilder(byteorder=Endian.Big, wordorder=Endian.Little)
+           for d in data:
+               builder.add_16bit_int(int(d))
+           payload = builder.build()
+           self.client.write_registers(reg1, payload, skip_encode=True, unit=address)  #only reg 1?
