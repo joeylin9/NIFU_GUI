@@ -293,6 +293,23 @@ class graph:
         while not self.gui_plot_stopped:
             for p in plots:
                 p.clear()
+                
+            plots[0].set_title('Temperature Over Time')
+            plots[0].set_xlabel('Time (s)')
+            plots[0].set_ylabel('Temperature (°C)')
+
+            plots[1].set_title('Pressure Over Time')
+            plots[1].set_xlabel('Time (s)')
+            plots[1].set_ylabel('Pressure (psi)')
+
+            plots[2].set_title('Balance Over Time')
+            plots[2].set_xlabel('Time (s)')
+            plots[2].set_ylabel('Balance (g)')
+
+            plots[3].set_title('Flow Rate Over Time')
+            plots[3].set_xlabel('Time (s)')
+            plots[3].set_ylabel('Flow Rate (mL/min)')
+
             for label, data_dict in self.data_dicts:
                 plotted = False
                 p_idx = {'Temperature': 0, 'Pressure': 1, 'Balance': 2, 'Flow Rate': 3}[label]
@@ -333,4 +350,4 @@ class graph:
         self.gui_plot_stopped = boolean
 
     def test(self):
-        print(self.temperature_dict)
+        pass
