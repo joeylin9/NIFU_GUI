@@ -4,6 +4,7 @@ from time import sleep
 import struct
 from pymodbus.constants import Endian
 from pymodbus.payload import BinaryPayloadBuilder
+import random
 
 
 class Pump:
@@ -79,6 +80,7 @@ class Pump:
         response = ser.readline().decode('ascii')
         print(f'{ser.portstr}: {response}')
 
+
 class Balance:
     def balance_connect(self, port_number):
         p = f'COM{port_number}'
@@ -91,65 +93,71 @@ class Balance:
         ser.close()
         print("disconnected from: " + ser.portstr)
 
+
 class PLC:
     def __init__(self, graph_obj) -> None:
-        self.client = ModbusTcpClient(host = '169.254.92.250', port = 502)
+        self.client = ModbusTcpClient(host='169.254.92.250', port=502)
         self.reading = False
         self.data = None
         self.graph_obj = graph_obj
-    
+
     def connect(self):
         self.client.connect()
+        print("Connected")
 
     def disconnect(self):
         self.client.close()
-    
+        print("Disconnected")
+
     def reading_onoff(self, boolean):
         self.reading = boolean
 
-    def read_temp(self, name, label, reg1, reg2 = None):
+    def read_temp(self, name, label, reg1, reg2=None):
         """
         Inputs in two registers. The second register is optional.
-        
+
         If two registers are entered, the data is a 32 bit data, else
         one register means 16 bit
 
-        Returns a list of the modbus reponses (likely floats). If both 
-        registers are inputted, 
+        Returns a list of the modbus reponses (likely floats). If both
+        registers are inputted,
         """
         while self.reading:  # make sure to start a new thread when rechecking / restarting excel sheet
-            r1, r2 = None, None
+            r2 = None
             r1 = self.client.read_holding_registers(reg1, 1).registers[0]
             if reg2:
                 r2 = self.client.read_holding_registers(reg2, 1).registers[0]
-            
-            current_temp = struct.unpack('f', struct.pack('<HH', int(r1), int(r2)))[0]
-            label.config(text = str(current_temp))
 
-            # x = random.randint(0,100)
-            # label.config(text=str(x))
-            
-            #write into dict for graph
+            if r2:
+                current_temp = struct.unpack('f', struct.pack('<HH', int(r1), int(r2)))[0]
+            else:
+                current_temp = struct.unpack('f', struct.pack('<HH', int(r1)))[0]
+            current_temp = round(current_temp, 3)
+
+            # current_temp = random.randint(0,100) #this is to test
+            label.config(text=str(current_temp))
+
+            # write into dict for graph
             self.graph_obj.update_dict("Temperature", name, current_temp)
             # excel_obj.write[data, data]
             sleep(.5)
-        
-    def write_temp(self, data, reg1, reg2 = None):
+
+    def write_temp(self, data, reg1, reg2=None):
         data = [data]
         address = 0
-        
+
         for i in range(10):
-           print('-'*5,'Cycle ',i,'-'*30)
-           sleep(1.0) # why sleep
-        
-           # increment data by one
-           for i,d in enumerate(data):
-              data[i] = d + 1
-        
-           # write holding registers
-           print('Write:',data)
-           builder = BinaryPayloadBuilder(byteorder=Endian.Big, wordorder=Endian.Little)
-           for d in data:
-               builder.add_16bit_int(int(d))
-           payload = builder.build()
-           self.client.write_registers(reg1, payload, skip_encode=True, unit=address)  #only reg 1?
+            print('-' * 5, 'Cycle ', i, '-' * 30)
+            sleep(1.0)  # why sleep
+
+            # increment data by one
+            for i, d in enumerate(data):
+                data[i] = d + 1
+
+            # write holding registers
+            print('Write:', data)
+            builder = BinaryPayloadBuilder(byteorder=Endian.Big, wordorder=Endian.Little)
+            for d in data:
+                builder.add_16bit_int(int(d))
+            payload = builder.build()
+            self.client.write_registers(reg1, payload, skip_encode=True, unit=address)  # only reg 1?
