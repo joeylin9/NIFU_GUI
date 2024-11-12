@@ -95,11 +95,13 @@ class Balance:
 
 
 class PLC:
-    def __init__(self, graph_obj) -> None:
-        self.client = ModbusTcpClient(host='169.254.92.250', port=502)
+    def __init__(self, host_num, port_num = None) -> None:
+        if port_num:
+            self.client = ModbusTcpClient(host=host_num, port=port_num)
+        else:
+            self.client = ModbusTcpClient(host=host_num)
         self.reading = False
         self.data = None
-        self.graph_obj = graph_obj
 
     def connect(self):
         self.client.connect()
@@ -108,6 +110,10 @@ class PLC:
     def disconnect(self):
         self.client.close()
         print("Disconnected")
+    
+class temp(PLC):
+    def set_graph_obj(self, graph_obj):
+        self.graph_obj = graph_obj
 
     def reading_onoff(self, boolean):
         self.reading = boolean
@@ -156,6 +162,31 @@ class PLC:
 
             # write holding registers
             print('Write:', data)
+            builder = BinaryPayloadBuilder(byteorder=Endian.Big, wordorder=Endian.Little)
+            for d in data:
+                builder.add_16bit_int(int(d))
+            payload = builder.build()
+            self.client.write_registers(reg1, payload, skip_encode=True, unit=address)  # only reg 1?
+        
+class valve_fan(PLC):
+    def write_onoff(self, address_num, boolean):
+        self.client.write_coil(address=address_num, value=boolean)
+
+class stirrer(PLC):
+    def write_stirrer(self, data, reg1, reg2=None):
+        data = [data]
+        address = 0
+
+        for i in range(10):
+            # print('-' * 5, 'Cycle ', i, '-' * 30)
+            # sleep(1.0)  # why sleep
+
+            # increment data by one
+            for i, d in enumerate(data):
+                data[i] = d + 1
+
+            # write holding registers
+            # print('Write:', data)
             builder = BinaryPayloadBuilder(byteorder=Endian.Big, wordorder=Endian.Little)
             for d in data:
                 builder.add_16bit_int(int(d))
